@@ -10,6 +10,6 @@
   <circle cx="33" cy="30" r="7" fill="none" stroke="#fff" stroke-width="2.5" />
   <path d="M15 30 L21 22 L27 30 L33 30" fill="none" stroke="#fff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" />
   <path d="M22 22 H30" fill="none" stroke="#fff" stroke-width="2.5" stroke-linecap="round" />
-  <text x="56" y="22" font-family="Arial, sans-serif" font-size="18" font-weight="700" fill="#ffffff">Kıbrıs Türk</text>
+  <text x="56" y="22" font-family="Arial, sans-serif" font-size="10" fill="#ffffff">Kıbrıs Türk</text>
   <text x="56" y="38" font-family="Arial, sans-serif" font-size="10" fill="#dce6ff">Bisiklet Federasyonu</text>
 </svg>
