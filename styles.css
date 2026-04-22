@@ -36,6 +36,17 @@ body {
   padding: 1rem 0;
 }
 
+.brand {
+  display: inline-flex;
+  align-items: center;
+}
+
+.brand img {
+  height: 44px;
+  width: auto;
+  display: block;
+}
+
 .nav ul {
   display: flex;
   list-style: none;

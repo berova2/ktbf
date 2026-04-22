@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 48">
+  <defs>
+    <linearGradient id="g" x1="0" x2="1" y1="0" y2="1">
+      <stop offset="0" stop-color="#0d6efd" />
+      <stop offset="1" stop-color="#18386f" />
+    </linearGradient>
+  </defs>
+  <rect x="1" y="1" width="46" height="46" rx="10" fill="url(#g)" />
+  <circle cx="15" cy="30" r="7" fill="none" stroke="#fff" stroke-width="2.5" />
+  <circle cx="33" cy="30" r="7" fill="none" stroke="#fff" stroke-width="2.5" />
+  <path d="M15 30 L21 22 L27 30 L33 30" fill="none" stroke="#fff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" />
+  <path d="M22 22 H30" fill="none" stroke="#fff" stroke-width="2.5" stroke-linecap="round" />
+  <text x="56" y="22" font-family="Arial, sans-serif" font-size="18" font-weight="700" fill="#ffffff">KTBF</text>
+  <text x="56" y="38" font-family="Arial, sans-serif" font-size="10" fill="#dce6ff">Bisiklet Federasyonu</text>
+</svg>
