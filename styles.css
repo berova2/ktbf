@@ -215,6 +215,9 @@ body {
   overflow: hidden;
   background: linear-gradient(180deg, #0f2546, #1b4a88);
   box-shadow: 0 16px 30px rgba(13, 30, 56, 0.2);
+  max-width: 640px;
+  margin-left: auto;
+  margin-right: auto;
 }
 
 .slides {
@@ -364,6 +367,12 @@ footer {
 
   .hero-content h2 {
     max-width: 100%;
+  }
+}
+
+@media (min-width: 861px) {
+  .slider {
+    max-width: 560px;
   }
 }
 
