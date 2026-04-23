@@ -1,3 +1,40 @@
+// ── Yasal Belgeler – otomatik listele ──────────────────────────────────────
+(function () {
+  const list = document.getElementById("legal-docs-list");
+  if (!list) return;
+
+  fetch("LegalDocuments/manifest.json")
+    .then(function (r) {
+      if (!r.ok) throw new Error("manifest okunamadı");
+      return r.json();
+    })
+    .then(function (docs) {
+      if (!Array.isArray(docs) || docs.length === 0) {
+        list.innerHTML = "<li>Henüz belge eklenmemiş.</li>";
+        return;
+      }
+      list.innerHTML = docs
+        .map(function (doc) {
+          var safeName = String(doc.name || doc.file).replace(/</g, "&lt;");
+          var safeFile = String(doc.file).replace(/[^a-zA-Z0-9_.\-\u00C0-\u024F]/g, function (c) {
+            return encodeURIComponent(c);
+          });
+          return (
+            '<li><a href="LegalDocuments/' +
+            safeFile +
+            '" download>' +
+            safeName +
+            "</a></li>"
+          );
+        })
+        .join("");
+    })
+    .catch(function () {
+      list.innerHTML = "<li>Belgeler yüklenemedi.</li>";
+    });
+})();
+
+// ── Slider ─────────────────────────────────────────────────────────────────
 const slider = document.querySelector("[data-slider]");
 
 if (slider) {
