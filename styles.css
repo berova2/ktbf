@@ -180,13 +180,13 @@ body {
 }
 
 .downloads h4 {
-  margin: 0 0 0.55rem;
+  margin: 0 0 0.6rem;
   color: #163865;
 }
 
 .downloads ul {
   margin: 0;
-  padding-left: 1.1rem;
+  padding-left: 1rem;
 }
 
 .downloads a {
