@@ -166,6 +166,39 @@ body {
   max-width: 900px;
 }
 
+#talimatlar {
+  max-width: 900px;
+}
+
+.downloads {
+  margin-top: 1rem;
+  padding: 1rem 1.2rem;
+  border: 1px solid #d8e2f0;
+  border-radius: 14px;
+  background: var(--surface);
+  box-shadow: 0 7px 18px rgba(9, 26, 49, 0.08);
+}
+
+.downloads h4 {
+  margin: 0 0 0.55rem;
+  color: #163865;
+}
+
+.downloads ul {
+  margin: 0;
+  padding-left: 1.1rem;
+}
+
+.downloads a {
+  color: var(--primary);
+  font-weight: 600;
+}
+
+.downloads a:hover,
+.downloads a:focus-visible {
+  color: #0b53b0;
+}
+
 #galeri p {
   margin: 0.65rem 0 1.2rem;
 }
