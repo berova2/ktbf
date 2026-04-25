@@ -1,0 +1,8 @@
+Python modülünü ekledim ve localhost sunucusunu çalıştırdım.
+
+Eklenen dosya: local_server.py
+Sunucu şu an aktif: http://127.0.0.1:8000/
+
+C:/Users/SC/AppData/Local/Programs/Python/Python314/python.exe local_server.py --port 8000
+
+Durdurmak için sunucunun çalıştığı terminalde Ctrl+C kullanabilirsiniz.
