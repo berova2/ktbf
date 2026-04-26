@@ -147,6 +147,20 @@ body {
   box-shadow: 0 14px 26px rgba(10, 36, 79, 0.38);
 }
 
+.secondary-btn {
+  background: transparent;
+  color: var(--primary);
+  border: 1px solid var(--primary);
+  box-shadow: none;
+}
+
+.secondary-btn:hover,
+.secondary-btn:focus-visible {
+  background: rgba(15, 94, 199, 0.08);
+  color: #0b53b0;
+  box-shadow: none;
+}
+
 .section {
   padding: clamp(2.2rem, 6vw, 4rem) 0;
 }
@@ -336,6 +350,88 @@ body {
   box-shadow: 0 14px 24px rgba(9, 26, 49, 0.14);
 }
 
+.page-hero {
+  padding-bottom: 2.4rem;
+}
+
+.page-hero-content {
+  padding-top: 2.3rem;
+}
+
+.page-hero-content h1 {
+  margin: 0.65rem 0 0;
+  font-size: clamp(2rem, 4.8vw, 3.1rem);
+  line-height: 1.15;
+}
+
+.about-layout {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 1rem;
+}
+
+.about-card {
+  background: var(--surface);
+  border: 1px solid #d8e2f0;
+  border-radius: 14px;
+  padding: 1.1rem;
+  box-shadow: 0 7px 18px rgba(9, 26, 49, 0.08);
+}
+
+.about-card h2,
+.board-section h2 {
+  margin: 0;
+  color: #163865;
+  font-size: clamp(1.25rem, 2.5vw, 1.6rem);
+}
+
+.about-card p {
+  margin: 0.65rem 0 0;
+}
+
+.board-section p {
+  margin: 0.65rem 0 1rem;
+}
+
+.table-wrap {
+  overflow-x: auto;
+  border-radius: 14px;
+  border: 1px solid #d8e2f0;
+  background: var(--surface);
+  box-shadow: 0 7px 18px rgba(9, 26, 49, 0.08);
+}
+
+.board-table {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 520px;
+}
+
+.board-table th,
+.board-table td {
+  text-align: left;
+  padding: 0.82rem 0.95rem;
+  border-bottom: 1px solid #e5edf7;
+}
+
+.board-table thead th {
+  background: #f2f6fd;
+  color: #163865;
+  font-weight: 700;
+}
+
+.board-table tbody tr:nth-child(even) {
+  background: #fbfdff;
+}
+
+.board-table tbody tr:hover {
+  background: #f5f9ff;
+}
+
+.board-table tbody tr:last-child td {
+  border-bottom: 0;
+}
+
 footer {
   background: #0c1525;
   color: #cfd8e6;
@@ -390,5 +486,9 @@ footer {
   .btn {
     width: 100%;
     text-align: center;
+  }
+
+  .board-table {
+    min-width: 460px;
   }
 }
