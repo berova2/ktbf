@@ -13,6 +13,16 @@ from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
 
+class NoCacheHTTPRequestHandler(SimpleHTTPRequestHandler):
+    """Serve static files with no-cache headers for local development."""
+
+    def end_headers(self) -> None:
+        self.send_header("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0")
+        self.send_header("Pragma", "no-cache")
+        self.send_header("Expires", "0")
+        super().end_headers()
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Serve the current project on localhost for quick previews."
@@ -41,7 +51,7 @@ def main() -> None:
 
     os.chdir(web_dir)
 
-    server = ThreadingHTTPServer((args.host, args.port), SimpleHTTPRequestHandler)
+    server = ThreadingHTTPServer((args.host, args.port), NoCacheHTTPRequestHandler)
     url = f"http://{args.host}:{args.port}/"
 
     print(f"Serving: {web_dir}")
