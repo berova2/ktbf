@@ -180,6 +180,16 @@ body {
   max-width: 900px;
 }
 
+#iletisim a {
+  color: var(--primary);
+  font-weight: 600;
+}
+
+#iletisim a:hover,
+#iletisim a:focus-visible {
+  color: #0b53b0;
+}
+
 #talimatlar {
   max-width: 900px;
 }
