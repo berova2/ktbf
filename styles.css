@@ -4,6 +4,7 @@
   --text: #152238;
   --muted: #5a677a;
   --primary: #0f5ec7;
+  --primary-hover: #0b53b0;
   --accent: #ef5a21;
   --dark: #0d1e38;
   --card: #ffffff;
@@ -187,7 +188,7 @@ body {
 
 #iletisim a:hover,
 #iletisim a:focus-visible {
-  color: #0b53b0;
+  color: var(--primary-hover);
 }
 
 #talimatlar {
