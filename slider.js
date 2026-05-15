@@ -39,19 +39,35 @@ const slider = document.querySelector("[data-slider]");
 
 if (slider) {
   const slidesContainer = slider.querySelector("[data-slides]");
-  const slides = Array.from(slidesContainer.querySelectorAll("[data-slide]"));
+  let slides = Array.from(slidesContainer.querySelectorAll("[data-slide]"));
   const prevButton = slider.querySelector("[data-prev]");
   const nextButton = slider.querySelector("[data-next]");
   const dotsContainer = slider.querySelector("[data-dots]");
+  const uploadInput = document.getElementById("gallery-upload-input");
+  const uploadButton = document.getElementById("gallery-upload-button");
+  const uploadStatus = document.getElementById("gallery-upload-status");
 
-  if (slides.length <= 1) {
-    slidesContainer.style.transform = "translateX(0)";
-  } else if (prevButton && nextButton && dotsContainer) {
+  if (slidesContainer) {
     let currentIndex = 0;
     const autoPlayDelay = 4000;
     let autoPlayTimer;
 
+    const setUploadStatus = (message, hasError) => {
+      if (!uploadStatus) return;
+      uploadStatus.textContent = message || "";
+      uploadStatus.classList.toggle("is-error", Boolean(hasError));
+    };
+
+    const updateControls = () => {
+      const hasMultipleSlides = slides.length > 1;
+      if (prevButton) prevButton.hidden = !hasMultipleSlides;
+      if (nextButton) nextButton.hidden = !hasMultipleSlides;
+      if (dotsContainer) dotsContainer.hidden = !hasMultipleSlides;
+    };
+
     const createDots = () => {
+      if (!dotsContainer) return;
+      dotsContainer.innerHTML = "";
       slides.forEach((_, index) => {
         const dot = document.createElement("button");
         dot.type = "button";
@@ -65,6 +81,7 @@ if (slider) {
     };
 
     const updateDots = () => {
+      if (!dotsContainer) return;
       const dots = Array.from(dotsContainer.querySelectorAll("button"));
       dots.forEach((dot, index) => {
         dot.classList.toggle("is-active", index === currentIndex);
@@ -72,6 +89,7 @@ if (slider) {
     };
 
     const goToSlide = (index) => {
+      if (!slides.length) return;
       currentIndex = (index + slides.length) % slides.length;
       slidesContainer.style.transform = `translateX(-${currentIndex * 100}%)`;
       updateDots();
@@ -87,7 +105,9 @@ if (slider) {
 
     const startAutoPlay = () => {
       clearInterval(autoPlayTimer);
-      autoPlayTimer = setInterval(nextSlide, autoPlayDelay);
+      if (slides.length > 1) {
+        autoPlayTimer = setInterval(nextSlide, autoPlayDelay);
+      }
     };
 
     const restartAutoPlay = () => {
@@ -95,19 +115,81 @@ if (slider) {
       startAutoPlay();
     };
 
+    const addSlideFromFile = (result, fileName) => {
+      const slide = document.createElement("figure");
+      slide.className = "slide";
+      slide.setAttribute("data-slide", "");
+
+      const image = document.createElement("img");
+      image.src = result;
+      image.alt = fileName ? `${fileName} galerisi` : "Yüklenen galeri fotoğrafı";
+
+      slide.appendChild(image);
+      slidesContainer.appendChild(slide);
+
+      slides = Array.from(slidesContainer.querySelectorAll("[data-slide]"));
+      createDots();
+      updateControls();
+      goToSlide(slides.length - 1);
+      restartAutoPlay();
+    };
+
+    const handleUpload = () => {
+      if (!uploadInput || !uploadInput.files || uploadInput.files.length === 0) {
+        setUploadStatus("Lütfen galeriden en az bir fotoğraf seçin.", true);
+        return;
+      }
+
+      const imageFiles = Array.from(uploadInput.files).filter((file) => file.type.startsWith("image/"));
+      if (!imageFiles.length) {
+        setUploadStatus("Sadece görsel dosyaları yükleyebilirsiniz.", true);
+        return;
+      }
+
+      let loadedCount = 0;
+      imageFiles.forEach((file) => {
+        const reader = new FileReader();
+        reader.onload = () => {
+          addSlideFromFile(reader.result, file.name);
+          loadedCount += 1;
+          if (loadedCount === imageFiles.length) {
+            setUploadStatus(`${loadedCount} fotoğraf galeriye eklendi.`);
+            uploadInput.value = "";
+          }
+        };
+        reader.onerror = () => {
+          setUploadStatus("Fotoğraf yüklenirken bir hata oluştu.", true);
+        };
+        reader.readAsDataURL(file);
+      });
+    };
+
     createDots();
+    updateControls();
     goToSlide(0);
     startAutoPlay();
 
-    nextButton.addEventListener("click", () => {
-      nextSlide();
-      restartAutoPlay();
-    });
+    if (nextButton) {
+      nextButton.addEventListener("click", () => {
+        nextSlide();
+        restartAutoPlay();
+      });
+    }
 
-    prevButton.addEventListener("click", () => {
-      prevSlide();
-      restartAutoPlay();
-    });
+    if (prevButton) {
+      prevButton.addEventListener("click", () => {
+        prevSlide();
+        restartAutoPlay();
+      });
+    }
+
+    if (uploadButton) {
+      uploadButton.addEventListener("click", handleUpload);
+    }
+
+    if (uploadInput) {
+      uploadInput.addEventListener("change", () => setUploadStatus(""));
+    }
 
     slider.addEventListener("mouseenter", () => clearInterval(autoPlayTimer));
     slider.addEventListener("mouseleave", startAutoPlay);
