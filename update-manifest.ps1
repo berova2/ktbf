@@ -1,27 +1,66 @@
-# LegalDocuments klasöründeki tüm dosyaları tarayıp manifest.json'ı günceller.
+# LegalDocuments ve EtkinlikGalerisi klasörlerindeki dosyaları tarayıp manifestleri günceller.
 # Kullanım: ./update-manifest.ps1
 
-$folder  = Join-Path $PSScriptRoot "LegalDocuments"
-$output  = Join-Path $folder "manifest.json"
+function Write-JsonManifest {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$FolderPath,
 
-$files = Get-ChildItem -Path $folder -File |
-         Where-Object { $_.Name -ne "manifest.json" } |
-         Sort-Object Name
+        [Parameter(Mandatory = $true)]
+        [scriptblock]$MapFile,
 
-$manifest = $files | ForEach-Object {
-    $displayName = [System.IO.Path]::GetFileNameWithoutExtension($_.Name) -replace '[_]', ' '
+        [string[]]$IncludeExtensions = @()
+    )
+
+    $output = Join-Path $FolderPath "manifest.json"
+    $allowed = @{}
+
+    foreach ($ext in $IncludeExtensions) {
+        $allowed[$ext.ToLowerInvariant()] = $true
+    }
+
+    $files = Get-ChildItem -Path $FolderPath -File |
+        Where-Object {
+            if ($_.Name -eq "manifest.json") { return $false }
+            if ($IncludeExtensions.Count -eq 0) { return $true }
+            return $allowed.ContainsKey($_.Extension.ToLowerInvariant())
+        } |
+        Sort-Object Name
+
+    $manifest = $files | ForEach-Object { & $MapFile $_ }
+
+    $json = if ($manifest) {
+        $manifest | ConvertTo-Json -AsArray
+    }
+    else {
+        "[]"
+    }
+
+    $utf8NoBom = New-Object System.Text.UTF8Encoding($false)
+    [System.IO.File]::WriteAllText($output, $json, $utf8NoBom)
+    Write-Host "Manifest güncellendi: $($files.Count) dosya listelendi → $output"
+}
+
+$legalFolder = Join-Path $PSScriptRoot "LegalDocuments"
+Write-JsonManifest -FolderPath $legalFolder -MapFile {
+    param($file)
+    $displayName = [System.IO.Path]::GetFileNameWithoutExtension($file.Name) -replace '[_-]', ' '
     [ordered]@{
         name = $displayName
-        file = $_.Name
+        file = $file.Name
     }
 }
 
-$json = if ($manifest) {
-    $manifest | ConvertTo-Json -AsArray
-} else {
-    "[]"
+$galleryFolder = Join-Path $PSScriptRoot "EtkinlikGalerisi"
+if (-not (Test-Path $galleryFolder)) {
+    New-Item -Path $galleryFolder -ItemType Directory | Out-Null
 }
 
-[System.IO.File]::WriteAllText($output, $json, [System.Text.Encoding]::UTF8)
-
-Write-Host "Manifest güncellendi: $($files.Count) dosya listelendi → $output"
+Write-JsonManifest -FolderPath $galleryFolder -IncludeExtensions @(".jpg", ".jpeg", ".png", ".webp", ".gif", ".svg") -MapFile {
+    param($file)
+    $altText = [System.IO.Path]::GetFileNameWithoutExtension($file.Name) -replace '[_-]', ' '
+    [ordered]@{
+        alt  = $altText
+        file = $file.Name
+    }
+}

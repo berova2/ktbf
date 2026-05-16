@@ -1,7 +1,10 @@
 [
-  { "name": "KKTC Spor Yasası",
-    "file": "08-1978.DOC"},
-    {"name": "Bisiklet Federasyonu Tüzüğü",
+  {
+    "name": "Bisiklet Federasyon Tüzüğü",
     "file": "Bisiklet_Federasyon_Tüzüğü.pdf"
+  },
+  {
+    "name": "Spor Beden Eğitimi Yasası 08 1978",
+    "file": "Spor_Beden_Eğitimi_Yasası_08-1978.DOC"
   }
 ]

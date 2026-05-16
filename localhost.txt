@@ -6,3 +6,11 @@ Sunucu şu an aktif: http://127.0.0.1:8000/
 C:/Users/SC/AppData/Local/Programs/Python/Python314/python.exe local_server.py --port 8000
 
 Durdurmak için sunucunun çalıştığı terminalde Ctrl+C kullanabilirsiniz.
+
+Tek komutla galeri guncelle + sunucu ac:
+
+PowerShell:
+./preview-gallery.ps1 -Open
+
+Alternatif port:
+./preview-gallery.ps1 -Port 8080 -Open

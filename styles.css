@@ -320,6 +320,17 @@ body {
   background: var(--accent);
 }
 
+.gallery-status {
+  margin-top: 0.8rem;
+  text-align: center;
+  color: var(--muted);
+  font-style: italic;
+}
+
+.gallery-status.is-hidden {
+  display: none;
+}
+
 #faaliyetler {
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.6), rgba(255, 255, 255, 0.86));
   border-radius: 18px;
