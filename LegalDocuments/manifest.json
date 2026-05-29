@@ -23,6 +23,12 @@
  "file" : "KT_Bisiklet_Federasyonu_Üyelik_Talimatı.pdf"},
 
  { "name": "Külüpler İçin Federasyon Üyelik Başvuru Formu (excel)",
- "file" : "KULÜP YENİDEN KAYIT- AKTİF ÜYELİK BAŞVURU FORMU.xlsx"}
+ "file" : "KULÜP YENİDEN KAYIT- AKTİF ÜYELİK BAŞVURU FORMU.xlsx"},
+
+ { "name": "Sporcu Lisans Talimatı",
+ "file" : "Sporcu_Lisans_Talimatı.pdf"},
+ 
+ { "name": "Yabancı Uyruklu ve Misafir Sporcu Lisans Talimatı", 
+ "file" : "Yabanci_Uyruklu_Misafir_Sporcu_Talimati.pdf"}
 
 ]
