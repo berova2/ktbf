@@ -29,6 +29,9 @@
  "file" : "Sporcu_Lisans_Talimatı.pdf"},
 
  { "name": "Yabancı Uyruklu ve Misafir Sporcu Lisans Talimatı", 
- "file" : "Yabanci_Uyruklu_Misafir_Sporcu_Talimati.pdf"}
+ "file" : "Yabanci_Uyruklu_Misafir_Sporcu_Talimati.pdf"},
+
+ {"name" :"",
+ "file" : "KTBF_Yabanci_Federasyon_Lisansli_KKTC_Vatandasi_Sporcular_Talimati.pdf"}
 
 ]
