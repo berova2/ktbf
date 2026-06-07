@@ -357,10 +357,11 @@ class SporcuSekme(ttk.Frame):
                    ).pack(side="left")
 
         cols = [("id","ID",38), ("ad","Ad",85), ("soyad","Soyad",95),
-                ("kimlik_no","Kimlik No",105), ("dogum_tarihi","Doğum",82),
-                ("uyruk","Uyruk",48), ("telefon","Telefon",100),
-                ("lisans_no","Lisans No",88), ("kulup_adi","Kulüp",130),
-                ("spor_dairesi_kayitli","BYS",38)]
+            ("kimlik_no","Kimlik No",105), ("dogum_tarihi","Doğum",82),
+            ("yas_kategorisi","Yaş Kategorisi",120),
+            ("uyruk","Uyruk",48), ("telefon","Telefon",100),
+            ("lisans_no","Lisans No",88), ("kulup_adi","Kulüp",130),
+            ("spor_dairesi_kayitli","BYS",38)]
         tf, self.tree = _make_tree(list_frame, cols)
         tf.pack(fill="both", expand=True)
         self.tree.bind("<<TreeviewSelect>>", self._on_sec)
@@ -368,6 +369,26 @@ class SporcuSekme(ttk.Frame):
     # ------------------------------------------------------------------
     _SPORCU_QUERY = """
         SELECT s.id, s.ad, s.soyad, s.kimlik_no, s.dogum_tarihi,
+               CASE
+                   WHEN s.dogum_tarihi IS NULL OR TRIM(s.dogum_tarihi) = '' THEN '—'
+                   WHEN (CAST(strftime('%Y','now') AS INTEGER) - CAST(substr(s.dogum_tarihi,1,4) AS INTEGER)) BETWEEN 11 AND 12
+                       THEN 'Yıldız C / U13'
+                   WHEN (CAST(strftime('%Y','now') AS INTEGER) - CAST(substr(s.dogum_tarihi,1,4) AS INTEGER)) BETWEEN 13 AND 14
+                       THEN 'Yıldız B / U15'
+                   WHEN (CAST(strftime('%Y','now') AS INTEGER) - CAST(substr(s.dogum_tarihi,1,4) AS INTEGER)) BETWEEN 15 AND 16
+                       THEN 'Yıldız A / U17'
+                   WHEN (CAST(strftime('%Y','now') AS INTEGER) - CAST(substr(s.dogum_tarihi,1,4) AS INTEGER)) BETWEEN 17 AND 18
+                       THEN 'Junior / U19'
+                   WHEN (CAST(strftime('%Y','now') AS INTEGER) - CAST(substr(s.dogum_tarihi,1,4) AS INTEGER)) BETWEEN 19 AND 34
+                       THEN 'Elite'
+                   WHEN (CAST(strftime('%Y','now') AS INTEGER) - CAST(substr(s.dogum_tarihi,1,4) AS INTEGER)) BETWEEN 35 AND 44
+                       THEN 'Master 1'
+                   WHEN (CAST(strftime('%Y','now') AS INTEGER) - CAST(substr(s.dogum_tarihi,1,4) AS INTEGER)) BETWEEN 45 AND 54
+                       THEN 'Master 2'
+                   WHEN (CAST(strftime('%Y','now') AS INTEGER) - CAST(substr(s.dogum_tarihi,1,4) AS INTEGER)) >= 55
+                       THEN 'Master 3'
+                   ELSE 'Kategori Dışı'
+               END AS yas_kategorisi,
                s.uyruk, s.telefon,
                COALESCE(l.lisans_no, '—')  AS lisans_no,
                COALESCE(k.ad, 'Ferdi')     AS kulup_adi,
