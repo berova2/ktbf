@@ -28,10 +28,10 @@
  { "name": "Sporcu Lisans Talimatı",
  "file" : "Sporcu_Lisans_Talimatı.pdf"},
 
- { "name": "Yabancı Uyruklu ve Misafir Sporcu Lisans Talimatı", 
+ { "name": "Yabancı Uyruklu ve Mkisafir Sporcu Lisans Talimatı", 
  "file" : "Yabanci_Uyruklu_Misafir_Sporcu_Talimati.pdf"},
 
- {"name" :"",
+ {"name" :"KTBF Yabancı Federasyon Lisanslı KKTC Vatandaşı Sporcular Talimatı",
  "file" : "KTBF_Yabanci_Federasyon_Lisansli_KKTC_Vatandasi_Sporcular_Talimati.pdf"}
 
 ]
