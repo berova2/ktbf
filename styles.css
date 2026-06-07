@@ -181,6 +181,26 @@ body {
   max-width: 900px;
 }
 
+#iletisim .contact-item {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  margin: 0.45rem 0;
+}
+
+#iletisim .contact-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
+  text-decoration: none;
+}
+
+#iletisim .contact-icon {
+  width: 18px;
+  height: 18px;
+  flex: 0 0 18px;
+}
+
 #iletisim a {
   color: var(--primary);
   font-weight: 600;
