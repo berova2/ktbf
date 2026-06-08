@@ -71,6 +71,8 @@ CREATE TABLE IF NOT EXISTS sporcular (
     soyad                   TEXT    NOT NULL,
     kimlik_no               TEXT    NOT NULL UNIQUE,
     dogum_tarihi            TEXT,
+    cinsiyet                TEXT    NOT NULL DEFAULT 'Belirtilmedi'
+                                    CHECK(cinsiyet IN ('Erkek','Kadın','Belirtilmedi')),
     uyruk                   TEXT    NOT NULL DEFAULT 'KKTC',
     pasaport_no             TEXT,
     telefon                 TEXT,
@@ -188,6 +190,38 @@ CREATE TABLE IF NOT EXISTS vizeler (
     durum                   TEXT    NOT NULL DEFAULT 'Beklemede'
                                     CHECK(durum IN ('Beklemede','Onaylandı','Reddedildi'))
 );
+
+-- -------------------------------------------------------
+-- Yarışlar
+-- -------------------------------------------------------
+CREATE TABLE IF NOT EXISTS yarislar (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    ad              TEXT    NOT NULL,
+    tarih           TEXT,
+    yer             TEXT,
+    disiplin        TEXT    NOT NULL DEFAULT 'Diğer'
+                            CHECK(disiplin IN ('Yol','MTB','Pist','BMX','Cyclocross','Diğer')),
+    sezon           TEXT    NOT NULL,
+    durum           TEXT    NOT NULL DEFAULT 'Planlandı'
+                            CHECK(durum IN ('Planlandı','Kayıt Açık','Tamamlandı','İptal')),
+    notlar          TEXT,
+    kayit_tarihi    TEXT    NOT NULL DEFAULT (date('now'))
+);
+
+-- -------------------------------------------------------
+-- Yarış Kayıtları
+-- -------------------------------------------------------
+CREATE TABLE IF NOT EXISTS yaris_kayitlari (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    yaris_id        INTEGER NOT NULL REFERENCES yarislar(id) ON DELETE CASCADE,
+    sporcu_id       INTEGER NOT NULL REFERENCES sporcular(id) ON DELETE RESTRICT,
+    lisans_id       INTEGER NOT NULL REFERENCES lisanslar(id) ON DELETE RESTRICT,
+    kategori        TEXT,
+    durum           TEXT    NOT NULL DEFAULT 'Onaylandı'
+                            CHECK(durum IN ('Onaylandı','Beklemede','İptal')),
+    kayit_tarihi    TEXT    NOT NULL DEFAULT (date('now')),
+    UNIQUE(yaris_id, sporcu_id)
+);
 """
 
 
@@ -196,6 +230,16 @@ def init_db():
     os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
     with get_conn() as conn:
         conn.executescript(DDL)
+        # Eski veritabanlarında olmayan kolonları güvenli şekilde ekle.
+        cols = {
+            row["name"] for row in conn.execute("PRAGMA table_info(sporcular)").fetchall()
+        }
+        if "cinsiyet" not in cols:
+            conn.execute(
+                """ALTER TABLE sporcular
+                   ADD COLUMN cinsiyet TEXT NOT NULL DEFAULT 'Belirtilmedi'
+                   CHECK(cinsiyet IN ('Erkek','Kadın','Belirtilmedi'))"""
+            )
     print(f"Veritabanı hazır: {DB_PATH}")
 
 
@@ -233,6 +277,11 @@ def kulup_guncelle(kulup_id: int, **kwargs) -> None:
         )
 
 
+def kulup_sil(kulup_id: int) -> None:
+    with get_conn() as conn:
+        conn.execute("DELETE FROM kulupler WHERE id=?", (kulup_id,))
+
+
 def kulup_getir(kulup_id: int) -> Optional[sqlite3.Row]:
     with get_conn() as conn:
         return conn.execute("SELECT * FROM kulupler WHERE id=?", (kulup_id,)).fetchone()
@@ -260,7 +309,8 @@ def kulupler_dropdown() -> list:
 # ---------------------------------------------------------------------------
 
 def sporcu_ekle(ad: str, soyad: str, kimlik_no: str,
-                dogum_tarihi: str = None, uyruk: str = "KKTC",
+                dogum_tarihi: str = None, cinsiyet: str = "Belirtilmedi",
+                uyruk: str = "KKTC",
                 pasaport_no: str = None, telefon: str = None,
                 email: str = None, adres: str = None,
                 spor_dairesi_kayitli: int = 0) -> int:
@@ -272,17 +322,17 @@ def sporcu_ekle(ad: str, soyad: str, kimlik_no: str,
     with get_conn() as conn:
         cur = conn.execute(
             """INSERT INTO sporcular
-               (ad, soyad, kimlik_no, dogum_tarihi, uyruk, pasaport_no,
-                telefon, email, adres, spor_dairesi_kayitli)
-               VALUES (?,?,?,?,?,?,?,?,?,?)""",
-            (ad, soyad, kimlik_no, dogum_tarihi, uyruk, pasaport_no,
+                    (ad, soyad, kimlik_no, dogum_tarihi, cinsiyet, uyruk, pasaport_no,
+                     telefon, email, adres, spor_dairesi_kayitli)
+                    VALUES (?,?,?,?,?,?,?,?,?,?,?)""",
+                (ad, soyad, kimlik_no, dogum_tarihi, cinsiyet, uyruk, pasaport_no,
              telefon, email, adres, spor_dairesi_kayitli)
         )
         return cur.lastrowid
 
 
 def sporcu_guncelle(sporcu_id: int, **kwargs) -> None:
-    izin = {"ad","soyad","kimlik_no","dogum_tarihi","uyruk","pasaport_no",
+    izin = {"ad","soyad","kimlik_no","dogum_tarihi","cinsiyet","uyruk","pasaport_no",
             "telefon","email","adres","spor_dairesi_kayitli"}
     sutunlar = {k: v for k, v in kwargs.items() if k in izin}
     if not sutunlar:
@@ -293,6 +343,11 @@ def sporcu_guncelle(sporcu_id: int, **kwargs) -> None:
             f"UPDATE sporcular SET {set_ifade} WHERE id=?",
             (*sutunlar.values(), sporcu_id)
         )
+
+
+def sporcu_sil(sporcu_id: int) -> None:
+    with get_conn() as conn:
+        conn.execute("DELETE FROM sporcular WHERE id=?", (sporcu_id,))
 
 
 def sporcu_getir(sporcu_id: int) -> Optional[sqlite3.Row]:
@@ -330,19 +385,6 @@ def veli_ekle(sporcu_id: int, ad_soyad: str,
 # Lisans işlemleri
 # ---------------------------------------------------------------------------
 
-def _spor_dairesi_kontrol(sporcu_id: int, conn: sqlite3.Connection) -> None:
-    """Madde 7A uyarınca Spor Dairesi kaydı yoksa hata fırlatır."""
-    row = conn.execute(
-        "SELECT spor_dairesi_kayitli FROM sporcular WHERE id=?", (sporcu_id,)
-    ).fetchone()
-    if row is None:
-        raise ValueError(f"Sporcu bulunamadı: id={sporcu_id}")
-    if not row["spor_dairesi_kayitli"]:
-        raise ValueError(
-            f"Sporcu (id={sporcu_id}) Spor Dairesi Bilgi Yönetim Sistemine kayıtlı değil. "
-            "Lisans işlemi yapılamaz. (Lisans Talimatı Madde 7A)"
-        )
-
 
 def lisans_ekle(sporcu_id: int, lisans_turu: str, sezon: str,
                 kulup_id: int = None, lisans_no: str = None,
@@ -354,10 +396,13 @@ def lisans_ekle(sporcu_id: int, lisans_turu: str, sezon: str,
                 notlar: str = None) -> int:
     """
     Yeni lisans kaydı ekler.
-    Spor Dairesi kaydı zorunluluğunu (Madde 7A) otomatik denetler.
     """
     with get_conn() as conn:
-        _spor_dairesi_kontrol(sporcu_id, conn)
+        row = conn.execute(
+            "SELECT id FROM sporcular WHERE id=?", (sporcu_id,)
+        ).fetchone()
+        if row is None:
+            raise ValueError(f"Sporcu bulunamadı: id={sporcu_id}")
         cur = conn.execute(
             """INSERT INTO lisanslar
                (lisans_no, sporcu_id, kulup_id, lisans_turu, sezon,
@@ -604,6 +649,181 @@ def kulup_sporcu_sayilari(sezon: str) -> list:
                ORDER BY sporcu_sayisi DESC""",
             (sezon,)
         ).fetchall()
+
+
+# ---------------------------------------------------------------------------
+# Yarış kayıt işlemleri
+# ---------------------------------------------------------------------------
+
+def yaris_ekle(ad: str, sezon: str, tarih: str = None, yer: str = None,
+               disiplin: str = "Diğer", durum: str = "Planlandı",
+               notlar: str = None) -> int:
+    with get_conn() as conn:
+        cur = conn.execute(
+            """INSERT INTO yarislar
+               (ad, tarih, yer, disiplin, sezon, durum, notlar)
+               VALUES (?,?,?,?,?,?,?)""",
+            (ad, tarih, yer, disiplin, sezon, durum, notlar)
+        )
+        return cur.lastrowid
+
+
+def yaris_guncelle(yaris_id: int, **kwargs) -> None:
+    izin = {"ad", "tarih", "yer", "disiplin", "sezon", "durum", "notlar"}
+    sutunlar = {k: v for k, v in kwargs.items() if k in izin}
+    if not sutunlar:
+        return
+    set_ifade = ", ".join(f"{k}=?" for k in sutunlar)
+    with get_conn() as conn:
+        conn.execute(
+            f"UPDATE yarislar SET {set_ifade} WHERE id=?",
+            (*sutunlar.values(), yaris_id),
+        )
+
+
+def yaris_sil(yaris_id: int) -> None:
+    with get_conn() as conn:
+        conn.execute("DELETE FROM yarislar WHERE id=?", (yaris_id,))
+
+
+def yaris_getir(yaris_id: int) -> Optional[sqlite3.Row]:
+    with get_conn() as conn:
+        return conn.execute(
+            "SELECT * FROM yarislar WHERE id=?", (yaris_id,)
+        ).fetchone()
+
+
+def yarislar_listele(sezon: str = None, durum: str = None) -> list:
+    with get_conn() as conn:
+        sql = "SELECT * FROM yarislar"
+        wh = []
+        params = []
+        if sezon:
+            wh.append("sezon=?")
+            params.append(sezon)
+        if durum:
+            wh.append("durum=?")
+            params.append(durum)
+        if wh:
+            sql += " WHERE " + " AND ".join(wh)
+        sql += " ORDER BY COALESCE(tarih, '9999-12-31'), ad"
+        return conn.execute(sql, tuple(params)).fetchall()
+
+
+def kayit_acik_yarislar(sezon: str = None) -> list:
+    """Sadece sporcu kaydına açık yarışları listeler."""
+    return yarislar_listele(sezon=sezon, durum="Kayıt Açık")
+
+
+def aktif_lisansli_sporcular() -> list:
+    """Aktif lisansı olan sporcuları (son aktif lisansı ile) döner."""
+    with get_conn() as conn:
+        return conn.execute(
+            """SELECT s.id AS sporcu_id,
+                      s.ad || ' ' || s.soyad AS ad_soyad,
+                      l.id AS lisans_id,
+                      l.lisans_no,
+                      COALESCE(k.ad, 'Ferdi') AS kulup_adi
+               FROM sporcular s
+               JOIN lisanslar l ON l.id = (
+                   SELECT id FROM lisanslar
+                   WHERE sporcu_id = s.id AND durum = 'Aktif'
+                   ORDER BY id DESC LIMIT 1
+               )
+               LEFT JOIN kulupler k ON k.id = l.kulup_id
+               ORDER BY s.soyad, s.ad"""
+        ).fetchall()
+
+
+def yaris_kayit_ekle(yaris_id: int, sporcu_id: int, lisans_id: int = None,
+                     kategori: str = None, durum: str = "Onaylandı") -> int:
+    with get_conn() as conn:
+        yaris = conn.execute(
+            "SELECT durum, ad FROM yarislar WHERE id=?", (yaris_id,)
+        ).fetchone()
+        if yaris is None:
+            raise ValueError("Yarış bulunamadı.")
+        if yaris["durum"] != "Kayıt Açık":
+            raise ValueError(
+                f"'{yaris['ad']}' yarışına kayıt kapalı. Sadece 'Kayıt Açık' yarışlara sporcu eklenebilir."
+            )
+
+        if lisans_id is None:
+            lis = conn.execute(
+                """SELECT id FROM lisanslar
+                   WHERE sporcu_id=? AND durum='Aktif'
+                   ORDER BY id DESC LIMIT 1""",
+                (sporcu_id,)
+            ).fetchone()
+            if lis is None:
+                raise ValueError("Sporcunun aktif lisansı bulunamadı.")
+            lisans_id = lis["id"]
+
+        cur = conn.execute(
+            """INSERT INTO yaris_kayitlari
+               (yaris_id, sporcu_id, lisans_id, kategori, durum)
+               VALUES (?,?,?,?,?)""",
+            (yaris_id, sporcu_id, lisans_id, kategori, durum)
+        )
+        return cur.lastrowid
+
+
+def yaris_kayit_sil(kayit_id: int) -> None:
+    with get_conn() as conn:
+        conn.execute("DELETE FROM yaris_kayitlari WHERE id=?", (kayit_id,))
+
+
+def yaris_kayit_guncelle(kayit_id: int, kategori: str = None,
+                         durum: str = None) -> None:
+    set_ifadeler = []
+    params = []
+    if kategori is not None:
+        set_ifadeler.append("kategori=?")
+        params.append(kategori)
+    if durum is not None:
+        set_ifadeler.append("durum=?")
+        params.append(durum)
+    if not set_ifadeler:
+        return
+    with get_conn() as conn:
+        conn.execute(
+            f"UPDATE yaris_kayitlari SET {', '.join(set_ifadeler)} WHERE id=?",
+            (*params, kayit_id),
+        )
+
+
+def yarisa_kayitli_sporcu_idleri(yaris_id: int) -> set[int]:
+    """Belirli bir yarışa kayıtlı sporcuların id kümesini döner."""
+    with get_conn() as conn:
+        rows = conn.execute(
+            "SELECT sporcu_id FROM yaris_kayitlari WHERE yaris_id=?",
+            (yaris_id,),
+        ).fetchall()
+    return {r["sporcu_id"] for r in rows}
+
+
+def yaris_kayitlari_listele(yaris_id: int = None) -> list:
+    with get_conn() as conn:
+        sql = (
+            """SELECT yk.id,
+                      y.ad AS yaris_adi,
+                      COALESCE(y.tarih, '—') AS yaris_tarihi,
+                      s.ad || ' ' || s.soyad AS sporcu,
+                      l.lisans_no,
+                      COALESCE(yk.kategori, '—') AS kategori,
+                      yk.durum,
+                      yk.kayit_tarihi
+               FROM yaris_kayitlari yk
+               JOIN yarislar y ON y.id = yk.yaris_id
+               JOIN sporcular s ON s.id = yk.sporcu_id
+               JOIN lisanslar l ON l.id = yk.lisans_id"""
+        )
+        params = ()
+        if yaris_id is not None:
+            sql += " WHERE yk.yaris_id=?"
+            params = (yaris_id,)
+        sql += " ORDER BY COALESCE(y.tarih, '9999-12-31'), y.ad, sporcu"
+        return conn.execute(sql, params).fetchall()
 
 
 if __name__ == "__main__":

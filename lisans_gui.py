@@ -4,6 +4,8 @@ KKTC Bisiklet Federasyonu – Kulüp ve Sporcu Kayıt Arayüzü
 Kullanım: python lisans_gui.py
 """
 
+import os
+import sys
 import tkinter as tk
 from tkinter import ttk, messagebox
 import lisans_db as db
@@ -22,6 +24,21 @@ BTN_DEL  = "#dc2626"
 FONT     = ("Segoe UI", 10)
 FONT_B   = ("Segoe UI", 10, "bold")
 FONT_H   = ("Segoe UI", 13, "bold")
+
+
+def _ensure_tcl_tk_env() -> None:
+    """Windows kurulumunda eksikse Tcl/Tk kütüphane yollarını ayarlar."""
+    if os.name != "nt":
+        return
+    if os.environ.get("TCL_LIBRARY") and os.environ.get("TK_LIBRARY"):
+        return
+
+    tcl_root = os.path.join(sys.base_prefix, "tcl")
+    tcl_dir = os.path.join(tcl_root, "tcl8.6")
+    tk_dir = os.path.join(tcl_root, "tk8.6")
+    if os.path.isdir(tcl_dir) and os.path.isdir(tk_dir):
+        os.environ.setdefault("TCL_LIBRARY", tcl_dir)
+        os.environ.setdefault("TK_LIBRARY", tk_dir)
 
 
 def _style_widget(root: tk.Tk) -> ttk.Style:
@@ -156,6 +173,8 @@ class KulupSekme(ttk.Frame):
                    command=self._kaydet).pack(side="left", padx=4)
         ttk.Button(btn, text="✏️ Güncelle", style="Upd.TButton",
                    command=self._guncelle).pack(side="left", padx=4)
+        ttk.Button(btn, text="🗑 Sil", style="Del.TButton",
+               command=self._sil).pack(side="left", padx=4)
         ttk.Button(btn, text="🔄 Temizle", style="Neu.TButton",
                    command=self._temizle).pack(side="left", padx=4)
 
@@ -239,6 +258,20 @@ class KulupSekme(ttk.Frame):
         self._listele()
         messagebox.showinfo("Başarılı", "Kulüp güncellendi.")
 
+    def _sil(self):
+        if not self._secili_id:
+            messagebox.showwarning("Uyarı", "Listeden bir kulüp seçin.")
+            return
+        if not messagebox.askyesno("Onay", "Seçili kulüp silinsin mi?"):
+            return
+        try:
+            db.kulup_sil(self._secili_id)
+            self._temizle()
+            self._listele()
+            messagebox.showinfo("Başarılı", "Kulüp silindi.")
+        except Exception as exc:
+            messagebox.showerror("Hata", str(exc))
+
     def _temizle(self):
         for v in (self.v_ad, self.v_yetkili, self.v_tel,
                   self.v_email, self.v_adres, self.v_renk):
@@ -290,52 +323,57 @@ class SporcuSekme(ttk.Frame):
         ttk.Label(form_frame, text="(YYYY-AA-GG)",
                   font=("Segoe UI", 8), foreground="gray"
                   ).grid(row=3, column=2, sticky="w")
+        self.v_cinsiyet = _lbl_combo(form_frame, "Cinsiyet",
+                         ["Belirtilmedi", "Erkek", "Kadın"], 4, width=14)
+        self.v_cinsiyet.set("Belirtilmedi")
         self.v_uyruk    = _lbl_combo(form_frame, "Uyruk",
-                                     ["KKTC", "TC", "Diğer"], 4, width=10)
+                         ["KKTC", "TC", "Diğer"], 5, width=10)
         self.v_uyruk.set("KKTC")
-        self.v_pasaport = _lbl_entry(form_frame, "Pasaport No",    5)
-        self.v_tel      = _lbl_entry(form_frame, "Telefon",        6)
-        self.v_email    = _lbl_entry(form_frame, "E-posta",        7)
-        self.v_adres    = _lbl_entry(form_frame, "Adres",          8)
+        self.v_pasaport = _lbl_entry(form_frame, "Pasaport No",    6)
+        self.v_tel      = _lbl_entry(form_frame, "Telefon",        7)
+        self.v_email    = _lbl_entry(form_frame, "E-posta",        8)
+        self.v_adres    = _lbl_entry(form_frame, "Adres",          9)
         self.v_sd_kayit = _lbl_check(form_frame,
-                                     "Spor Dairesi BYS Kayıtlı (Madde 7A)", 9)
+                         "Spor Dairesi BYS Kayıtlı", 10)
 
         # Kulüp seçimi — kayıtlı kulüpler veya Ferdi
         ttk.Label(form_frame, text="Kulüp").grid(
-            row=10, column=0, sticky="e", padx=(8, 4), pady=4)
+            row=11, column=0, sticky="e", padx=(8, 4), pady=4)
         self.v_kulup = tk.StringVar(value="— Ferdi —")
         self.cb_kulup = ttk.Combobox(form_frame, textvariable=self.v_kulup,
                                      width=24, state="readonly")
-        self.cb_kulup.grid(row=10, column=1, columnspan=2,
+        self.cb_kulup.grid(row=11, column=1, columnspan=2,
                            sticky="ew", padx=(0, 8), pady=4)
 
         # Lisans türü
         self.v_lisans_turu = _lbl_combo(
             form_frame, "Lisans Türü",
             ["Ulusal", "Uluslararası", "Ferdi", "Geçici", "MisafirSporcu"],
-            11, width=16)
+            12, width=16)
         self.v_lisans_turu.set("Ulusal")
 
         # Sezon
-        self.v_sezon = _lbl_entry(form_frame, "Sezon", 12, width=10)
+        self.v_sezon = _lbl_entry(form_frame, "Sezon", 13, width=10)
         self.v_sezon.set("2026")
 
         # Üretilen lisans no (salt okunur, kayıt sonrası dolar)
         ttk.Label(form_frame, text="Lisans No").grid(
-            row=13, column=0, sticky="e", padx=(8, 4), pady=4)
+            row=14, column=0, sticky="e", padx=(8, 4), pady=4)
         self.v_lisans_no = tk.StringVar(value="—")
         ttk.Label(form_frame, textvariable=self.v_lisans_no,
                   foreground=ACCENT, font=FONT_B).grid(
-            row=13, column=1, sticky="w", padx=(0, 8), pady=4)
+            row=14, column=1, sticky="w", padx=(0, 8), pady=4)
 
         form_frame.columnconfigure(1, weight=1)
 
         btn = ttk.Frame(form_frame)
-        btn.grid(row=14, column=0, columnspan=3, pady=(12, 4))
+        btn.grid(row=15, column=0, columnspan=3, pady=(12, 4))
         ttk.Button(btn, text="➕ Kaydet",           style="Add.TButton",
                    command=self._kaydet).pack(side="left", padx=4)
         ttk.Button(btn, text="✏️ Güncelle",         style="Upd.TButton",
                    command=self._guncelle).pack(side="left", padx=4)
+        ttk.Button(btn, text="🗑 Sil",               style="Del.TButton",
+               command=self._sil).pack(side="left", padx=4)
         ttk.Button(btn, text="🔄 Kulüpleri Yenile", style="Neu.TButton",
                    command=self._yukle_kulupler).pack(side="left", padx=4)
         ttk.Button(btn, text="✖ Temizle",           style="Neu.TButton",
@@ -357,6 +395,7 @@ class SporcuSekme(ttk.Frame):
                    ).pack(side="left")
 
         cols = [("id","ID",38), ("ad","Ad",85), ("soyad","Soyad",95),
+            ("cinsiyet","Cinsiyet",80),
             ("kimlik_no","Kimlik No",105), ("dogum_tarihi","Doğum",82),
             ("yas_kategorisi","Yaş Kategorisi",120),
             ("uyruk","Uyruk",48), ("telefon","Telefon",100),
@@ -368,7 +407,7 @@ class SporcuSekme(ttk.Frame):
 
     # ------------------------------------------------------------------
     _SPORCU_QUERY = """
-        SELECT s.id, s.ad, s.soyad, s.kimlik_no, s.dogum_tarihi,
+        SELECT s.id, s.ad, s.soyad, s.cinsiyet, s.kimlik_no, s.dogum_tarihi,
                CASE
                    WHEN s.dogum_tarihi IS NULL OR TRIM(s.dogum_tarihi) = '' THEN '—'
                    WHEN (CAST(strftime('%Y','now') AS INTEGER) - CAST(substr(s.dogum_tarihi,1,4) AS INTEGER)) BETWEEN 11 AND 12
@@ -435,6 +474,7 @@ class SporcuSekme(ttk.Frame):
             self.v_soyad.set(row["soyad"] or "")
             self.v_kimlik.set(row["kimlik_no"] or "")
             self.v_dogum.set(row["dogum_tarihi"] or "")
+            self.v_cinsiyet.set(row["cinsiyet"] or "Belirtilmedi")
             self.v_uyruk.set(row["uyruk"] or "KKTC")
             self.v_pasaport.set(row["pasaport_no"] or "")
             self.v_tel.set(row["telefon"] or "")
@@ -474,6 +514,7 @@ class SporcuSekme(ttk.Frame):
                 self.v_soyad.get().strip(),
                 self.v_kimlik.get().strip(),
                 dogum_tarihi=self.v_dogum.get() or None,
+                cinsiyet=self.v_cinsiyet.get() or "Belirtilmedi",
                 uyruk=self.v_uyruk.get() or "KKTC",
                 pasaport_no=self.v_pasaport.get() or None,
                 telefon=self.v_tel.get() or None,
@@ -481,27 +522,21 @@ class SporcuSekme(ttk.Frame):
                 adres=self.v_adres.get() or None,
                 spor_dairesi_kayitli=self.v_sd_kayit.get(),
             )
-            if self.v_sd_kayit.get():
-                kulup_id = self._kulup_map.get(self.v_kulup.get())  # None = Ferdi
-                lid = db.lisans_ekle(
-                    sid,
-                    self.v_lisans_turu.get() or "Ulusal",
-                    self.v_sezon.get() or "2026",
-                    kulup_id=kulup_id,
-                )
-                with db.get_conn() as conn:
-                    lis = conn.execute(
-                        "SELECT lisans_no FROM lisanslar WHERE id=?", (lid,)
-                    ).fetchone()
-                no = lis["lisans_no"] if lis else "—"
-                self.v_lisans_no.set(no)
-                messagebox.showinfo("Başarılı",
-                                    f"Sporcu kaydedildi.\nLisans No: {no}")
-            else:
-                self.v_lisans_no.set("—")
-                messagebox.showinfo("Başarılı",
-                                    "Sporcu kaydedildi.\n"
-                                    "⚠ BYS kaydı olmadığından lisans oluşturulmadı.")
+            kulup_id = self._kulup_map.get(self.v_kulup.get())  # None = Ferdi
+            lid = db.lisans_ekle(
+                sid,
+                self.v_lisans_turu.get() or "Ulusal",
+                self.v_sezon.get() or "2026",
+                kulup_id=kulup_id,
+            )
+            with db.get_conn() as conn:
+                lis = conn.execute(
+                    "SELECT lisans_no FROM lisanslar WHERE id=?", (lid,)
+                ).fetchone()
+            no = lis["lisans_no"] if lis else "—"
+            self.v_lisans_no.set(no)
+            messagebox.showinfo("Başarılı",
+                                f"Sporcu kaydedildi.\nLisans No: {no}")
             self._listele()
         except Exception as exc:
             messagebox.showerror("Hata", str(exc))
@@ -518,6 +553,7 @@ class SporcuSekme(ttk.Frame):
                 soyad=self.v_soyad.get().strip(),
                 kimlik_no=self.v_kimlik.get().strip(),
                 dogum_tarihi=self.v_dogum.get() or None,
+                cinsiyet=self.v_cinsiyet.get() or "Belirtilmedi",
                 uyruk=self.v_uyruk.get() or "KKTC",
                 pasaport_no=self.v_pasaport.get() or None,
                 telefon=self.v_tel.get() or None,
@@ -530,11 +566,26 @@ class SporcuSekme(ttk.Frame):
         except Exception as exc:
             messagebox.showerror("Hata", str(exc))
 
+    def _sil(self):
+        if not self._secili_id:
+            messagebox.showwarning("Uyarı", "Listeden bir sporcu seçin.")
+            return
+        if not messagebox.askyesno("Onay", "Seçili sporcu silinsin mi?"):
+            return
+        try:
+            db.sporcu_sil(self._secili_id)
+            self._temizle()
+            self._listele()
+            messagebox.showinfo("Başarılı", "Sporcu silindi.")
+        except Exception as exc:
+            messagebox.showerror("Hata", str(exc))
+
     # ------------------------------------------------------------------
     def _temizle(self):
         for v in (self.v_ad, self.v_soyad, self.v_kimlik, self.v_dogum,
                   self.v_pasaport, self.v_tel, self.v_email, self.v_adres):
             v.set("")
+        self.v_cinsiyet.set("Belirtilmedi")
         self.v_uyruk.set("KKTC")
         self.v_sd_kayit.set(0)
         self.v_kulup.set("— Ferdi —")
@@ -546,14 +597,477 @@ class SporcuSekme(ttk.Frame):
 
 
 # ---------------------------------------------------------------------------
+# YARIŞ KAYIT sekmesi
+# ---------------------------------------------------------------------------
+
+class YarisKayitSekme(ttk.Frame):
+    def __init__(self, parent):
+        super().__init__(parent, style="TFrame")
+        self._secili_yaris_id = None
+        self._yaris_map: dict = {}
+        self._sporcu_map: dict = {}
+        self._build()
+        self._yarislari_yukle()
+        self._sporculari_yukle()
+        self._kayitlari_listele()
+
+    def _build(self):
+        ttk.Label(self, text="YARIŞ KAYIT MODÜLÜ",
+                  style="Header.TLabel").pack(fill="x")
+
+        ust = ttk.LabelFrame(self, text="Yarış Tanımı", padding=8)
+        ust.pack(fill="x", padx=8, pady=(8, 4))
+
+        self.v_yaris_ad = _lbl_entry(ust, "Yarış Adı *", 0, width=26)
+        self.v_yaris_tarih = _lbl_entry(ust, "Tarih", 1, width=14)
+        ttk.Label(ust, text="(YYYY-AA-GG)", font=("Segoe UI", 8),
+                  foreground="gray").grid(row=1, column=2, sticky="w")
+        self.v_yaris_yer = _lbl_entry(ust, "Yer", 2, width=20)
+        self.v_yaris_disiplin = _lbl_combo(
+            ust, "Disiplin",
+            ["Yol", "MTB", "Pist", "BMX", "Cyclocross", "Diğer"],
+            3, width=14)
+        self.v_yaris_disiplin.set("Yol")
+        self.v_yaris_sezon = _lbl_entry(ust, "Sezon *", 4, width=10)
+        self.v_yaris_sezon.set("2026")
+        self.v_yaris_durum = _lbl_combo(
+            ust, "Durum",
+            ["Planlandı", "Kayıt Açık", "Tamamlandı", "İptal"],
+            5, width=14)
+        self.v_yaris_durum.set("Kayıt Açık")
+
+        ust.columnconfigure(1, weight=1)
+
+        b1 = ttk.Frame(ust)
+        b1.grid(row=6, column=0, columnspan=3, pady=(8, 2))
+        ttk.Button(b1, text="➕ Yarış Ekle", style="Add.TButton",
+                   command=self._yaris_ekle).pack(side="left", padx=4)
+        ttk.Button(b1, text="✏️ Yarış Güncelle", style="Upd.TButton",
+               command=self._yaris_guncelle).pack(side="left", padx=4)
+        ttk.Button(b1, text="🗑 Yarış Sil", style="Del.TButton",
+               command=self._yaris_sil).pack(side="left", padx=4)
+        ttk.Button(b1, text="🔄 Yarışları Yenile", style="Neu.TButton",
+                   command=self._yarislari_yukle).pack(side="left", padx=4)
+
+        orta = ttk.LabelFrame(self, text="Yarış Listesi", padding=4)
+        orta.pack(fill="x", padx=8, pady=4)
+        cols_yaris = [
+            ("id", "ID", 42),
+            ("ad", "Yarış", 220),
+            ("tarih", "Tarih", 90),
+            ("yer", "Yer", 140),
+            ("disiplin", "Disiplin", 90),
+            ("sezon", "Sezon", 65),
+            ("durum", "Durum", 100),
+        ]
+        tf1, self.tree_yaris = _make_tree(orta, cols_yaris)
+        tf1.pack(fill="x", expand=True)
+        self.tree_yaris.bind("<<TreeviewSelect>>", self._on_yaris_sec)
+
+        aksiyon = ttk.Frame(self)
+        aksiyon.pack(fill="x", padx=8, pady=(0, 6))
+        ttk.Button(aksiyon, text="📝 Sporcu Kayıt Penceresini Aç",
+               style="Neu.TButton",
+               command=self._kayit_penceresi_ac).pack(side="left")
+
+        alt = ttk.LabelFrame(self, text="Sporcu Yarış Kaydı", padding=8)
+        # Bu panel artık ana ekranda gösterilmiyor; kayıt işlemi ayrı pencerede.
+
+        ttk.Label(alt, text="Yarış").grid(row=0, column=0, sticky="e",
+                                            padx=(8, 4), pady=4)
+        self.v_kayit_yaris = tk.StringVar()
+        self.cb_kayit_yaris = ttk.Combobox(
+            alt, textvariable=self.v_kayit_yaris, width=32, state="readonly")
+        self.cb_kayit_yaris.grid(row=0, column=1, sticky="ew", padx=(0, 8), pady=4)
+        self.cb_kayit_yaris.bind("<<ComboboxSelected>>", self._on_kayit_yaris_sec)
+
+        ttk.Label(alt, text="Sporcu").grid(row=1, column=0, sticky="e",
+                                             padx=(8, 4), pady=4)
+        self.v_kayit_sporcu = tk.StringVar()
+        self.cb_kayit_sporcu = ttk.Combobox(
+            alt, textvariable=self.v_kayit_sporcu, width=32, state="readonly")
+        self.cb_kayit_sporcu.grid(row=1, column=1, sticky="ew", padx=(0, 8), pady=4)
+
+        self.v_kategori = _lbl_combo(
+            alt, "Kategori",
+            ["Elite", "Junior", "U17", "U15", "Master 1", "Master 2", "Master 3", "Diğer"],
+            2, width=16)
+        self.v_kategori.set("Elite")
+
+        alt.columnconfigure(1, weight=1)
+
+        b2 = ttk.Frame(alt)
+        b2.grid(row=3, column=0, columnspan=2, pady=(8, 4))
+        ttk.Button(b2, text="➕ Kaydı Oluştur", style="Add.TButton",
+                   command=self._kayit_ekle).pack(side="left", padx=4)
+        ttk.Button(b2, text="✖ Seçili Kaydı Sil", style="Del.TButton",
+                   command=self._kayit_sil).pack(side="left", padx=4)
+        ttk.Button(b2, text="🗂 Kayıt Penceresi", style="Neu.TButton",
+               command=self._kayit_penceresi_ac).pack(side="left", padx=4)
+        ttk.Button(b2, text="🔄 Sporcuları Yenile", style="Neu.TButton",
+                   command=self._sporculari_yukle).pack(side="left", padx=4)
+
+        cols_kayit = [
+            ("id", "ID", 42),
+            ("yaris_adi", "Yarış", 200),
+            ("yaris_tarihi", "Yarış Tarihi", 95),
+            ("sporcu", "Sporcu", 180),
+            ("lisans_no", "Lisans No", 90),
+            ("kategori", "Kategori", 90),
+            ("durum", "Durum", 85),
+            ("kayit_tarihi", "Kayıt Tarihi", 95),
+        ]
+        tf2, self.tree_kayit = _make_tree(alt, cols_kayit)
+        tf2.grid(row=4, column=0, columnspan=2, sticky="nsew", pady=(4, 0))
+        alt.rowconfigure(4, weight=1)
+
+    def _yaris_label(self, row):
+        tarih = row["tarih"] or "Tarihsiz"
+        return f"{row['ad']} ({tarih})"
+
+    def _yarislari_yukle(self):
+        rows = db.yarislar_listele()
+        _fill_tree(self.tree_yaris, rows)
+        acik_rows = db.kayit_acik_yarislar()
+        self._yaris_map = {self._yaris_label(r): r["id"] for r in acik_rows}
+        self.cb_kayit_yaris["values"] = list(self._yaris_map.keys())
+        if self.v_kayit_yaris.get() not in self._yaris_map:
+            self.v_kayit_yaris.set("")
+        if acik_rows and not self.v_kayit_yaris.get():
+            self.v_kayit_yaris.set(self._yaris_label(acik_rows[0]))
+        self._kayitlari_listele()
+
+    def _sporculari_yukle(self):
+        sec = self.v_kayit_yaris.get().strip()
+        yaris_id = self._yaris_map.get(sec) if sec else None
+        kayitli = db.yarisa_kayitli_sporcu_idleri(yaris_id) if yaris_id else set()
+        rows = db.aktif_lisansli_sporcular()
+        self._sporcu_map = {
+            f"{r['ad_soyad']} | {r['lisans_no']} | {r['kulup_adi']}": (r["sporcu_id"], r["lisans_id"])
+            for r in rows
+            if r["sporcu_id"] not in kayitli
+        }
+        self.cb_kayit_sporcu["values"] = list(self._sporcu_map.keys())
+        if self.v_kayit_sporcu.get() not in self._sporcu_map:
+            self.v_kayit_sporcu.set("")
+        if self._sporcu_map and not self.v_kayit_sporcu.get():
+            self.v_kayit_sporcu.set(list(self._sporcu_map.keys())[0])
+
+    def _kayitlari_listele(self):
+        sec = self.v_kayit_yaris.get().strip()
+        yaris_id = self._yaris_map.get(sec) if sec else None
+        rows = db.yaris_kayitlari_listele(yaris_id)
+        _fill_tree(self.tree_kayit, rows)
+
+    def _on_kayit_yaris_sec(self, _=None):
+        self._kayitlari_listele()
+        self._sporculari_yukle()
+
+    def _on_yaris_sec(self, _=None):
+        sel = self.tree_yaris.selection()
+        if not sel:
+            return
+        self._secili_yaris_id = int(sel[0])
+        row = db.yaris_getir(self._secili_yaris_id)
+        if not row:
+            return
+        self.v_yaris_ad.set(row["ad"] or "")
+        self.v_yaris_tarih.set(row["tarih"] or "")
+        self.v_yaris_yer.set(row["yer"] or "")
+        self.v_yaris_disiplin.set(row["disiplin"] or "Diğer")
+        self.v_yaris_sezon.set(row["sezon"] or "2026")
+        self.v_yaris_durum.set(row["durum"] or "Planlandı")
+        label = self._yaris_label(row)
+        if row["durum"] == "Kayıt Açık" and label in self._yaris_map:
+            self.v_kayit_yaris.set(label)
+            self._kayitlari_listele()
+            self._sporculari_yukle()
+
+    def _yaris_ekle(self):
+        ad = self.v_yaris_ad.get().strip()
+        sezon = self.v_yaris_sezon.get().strip()
+        if not ad or not sezon:
+            messagebox.showwarning("Uyarı", "Yarış adı ve sezon zorunludur.")
+            return
+        try:
+            db.yaris_ekle(
+                ad,
+                sezon=sezon,
+                tarih=self.v_yaris_tarih.get() or None,
+                yer=self.v_yaris_yer.get() or None,
+                disiplin=self.v_yaris_disiplin.get() or "Diğer",
+                durum=self.v_yaris_durum.get() or "Planlandı",
+            )
+            self.v_yaris_ad.set("")
+            self.v_yaris_tarih.set("")
+            self.v_yaris_yer.set("")
+            self.v_yaris_disiplin.set("Yol")
+            self.v_yaris_durum.set("Kayıt Açık")
+            self._yarislari_yukle()
+            messagebox.showinfo("Başarılı", "Yarış kaydı eklendi.")
+        except Exception as exc:
+            messagebox.showerror("Hata", str(exc))
+
+    def _yaris_guncelle(self):
+        if not self._secili_yaris_id:
+            messagebox.showwarning("Uyarı", "Listeden bir yarış seçin.")
+            return
+        ad = self.v_yaris_ad.get().strip()
+        sezon = self.v_yaris_sezon.get().strip()
+        if not ad or not sezon:
+            messagebox.showwarning("Uyarı", "Yarış adı ve sezon zorunludur.")
+            return
+        try:
+            db.yaris_guncelle(
+                self._secili_yaris_id,
+                ad=ad,
+                tarih=self.v_yaris_tarih.get() or None,
+                yer=self.v_yaris_yer.get() or None,
+                disiplin=self.v_yaris_disiplin.get() or "Diğer",
+                sezon=sezon,
+                durum=self.v_yaris_durum.get() or "Planlandı",
+            )
+            self._yarislari_yukle()
+            messagebox.showinfo("Başarılı", "Yarış güncellendi.")
+        except Exception as exc:
+            messagebox.showerror("Hata", str(exc))
+
+    def _yaris_sil(self):
+        if not self._secili_yaris_id:
+            messagebox.showwarning("Uyarı", "Listeden bir yarış seçin.")
+            return
+        if not messagebox.askyesno("Onay", "Seçili yarış silinsin mi?"):
+            return
+        try:
+            db.yaris_sil(self._secili_yaris_id)
+            self._secili_yaris_id = None
+            self.v_yaris_ad.set("")
+            self.v_yaris_tarih.set("")
+            self.v_yaris_yer.set("")
+            self.v_yaris_disiplin.set("Yol")
+            self.v_yaris_sezon.set("2026")
+            self.v_yaris_durum.set("Kayıt Açık")
+            self._yarislari_yukle()
+            messagebox.showinfo("Başarılı", "Yarış silindi.")
+        except Exception as exc:
+            messagebox.showerror("Hata", str(exc))
+
+    def _kayit_ekle(self):
+        yaris = self.v_kayit_yaris.get().strip()
+        sporcu = self.v_kayit_sporcu.get().strip()
+        yaris_id = self._yaris_map.get(yaris)
+        sporcu_info = self._sporcu_map.get(sporcu)
+        if not yaris_id or not sporcu_info:
+            messagebox.showwarning(
+                "Uyarı",
+                "Kayıt için sadece 'Kayıt Açık' yarış seçilebilir ve sporcu seçimi zorunludur.",
+            )
+            return
+        sporcu_id, lisans_id = sporcu_info
+        try:
+            db.yaris_kayit_ekle(
+                yaris_id=yaris_id,
+                sporcu_id=sporcu_id,
+                lisans_id=lisans_id,
+                kategori=self.v_kategori.get() or None,
+            )
+            self._kayitlari_listele()
+            self._sporculari_yukle()
+            messagebox.showinfo("Başarılı", "Sporcu yarışa kaydedildi.")
+        except Exception as exc:
+            if "UNIQUE constraint failed" in str(exc):
+                messagebox.showwarning(
+                    "Uyarı",
+                    "Bu sporcu seçili yarışa zaten kayıtlı.",
+                )
+                return
+            messagebox.showerror("Hata", str(exc))
+
+    def _kayit_sil(self):
+        sel = self.tree_kayit.selection()
+        if not sel:
+            messagebox.showwarning("Uyarı", "Silmek için bir kayıt seçin.")
+            return
+        kayit_id = int(sel[0])
+        if not messagebox.askyesno("Onay", "Seçili yarış kaydı silinsin mi?"):
+            return
+        db.yaris_kayit_sil(kayit_id)
+        self._kayitlari_listele()
+        self._sporculari_yukle()
+        messagebox.showinfo("Başarılı", "Yarış kaydı silindi.")
+
+    def _kayit_penceresi_ac(self):
+        win = tk.Toplevel(self)
+        win.title("Yarışa Sporcu Kayıt")
+        win.geometry("1500x900+0+0")
+        win.configure(bg=BG)
+
+        top = ttk.Frame(win)
+        top.pack(fill="x", padx=8, pady=8)
+        ttk.Label(top, text="Yarış:").pack(side="left", padx=(0, 6))
+
+        v_yaris = tk.StringVar(value=self.v_kayit_yaris.get())
+        cb = ttk.Combobox(
+            top,
+            textvariable=v_yaris,
+            values=list(self._yaris_map.keys()),
+            state="readonly",
+            width=34,
+        )
+        cb.pack(side="left", padx=(0, 8))
+
+        ttk.Label(top, text="Sporcu:").pack(side="left", padx=(6, 6))
+        v_sporcu = tk.StringVar()
+        cb_sporcu = ttk.Combobox(top, textvariable=v_sporcu,
+                                 state="readonly", width=42)
+        cb_sporcu.pack(side="left", padx=(0, 8))
+
+        ttk.Label(top, text="Kategori:").pack(side="left", padx=(6, 6))
+        v_kategori = tk.StringVar(value="Elite")
+        cb_kat = ttk.Combobox(
+            top,
+            textvariable=v_kategori,
+            values=["Elite", "Junior", "U17", "U15", "Master 1", "Master 2", "Master 3", "Diğer"],
+            state="readonly",
+            width=10,
+        )
+        cb_kat.pack(side="left", padx=(0, 8))
+
+        ttk.Label(top, text="Kayıt Durumu:").pack(side="left", padx=(6, 6))
+        v_durum = tk.StringVar(value="Onaylandı")
+        cb_durum = ttk.Combobox(
+            top,
+            textvariable=v_durum,
+            values=["Onaylandı", "Beklemede", "İptal"],
+            state="readonly",
+            width=10,
+        )
+        cb_durum.pack(side="left", padx=(0, 8))
+
+        cols = [
+            ("id", "ID", 42),
+            ("yaris_adi", "Yarış", 190),
+            ("yaris_tarihi", "Yarış Tarihi", 95),
+            ("sporcu", "Sporcu", 180),
+            ("lisans_no", "Lisans No", 90),
+            ("kategori", "Kategori", 90),
+            ("durum", "Durum", 85),
+            ("kayit_tarihi", "Kayıt Tarihi", 95),
+        ]
+        tf, tree = _make_tree(win, cols)
+        tf.pack(fill="both", expand=True, padx=8, pady=(0, 8))
+
+        sporcu_map: dict = {}
+
+        def refresh_sporcular(yaris_id):
+            nonlocal sporcu_map
+            kayitli = db.yarisa_kayitli_sporcu_idleri(yaris_id) if yaris_id else set()
+            rows = db.aktif_lisansli_sporcular()
+            sporcu_map = {
+                f"{r['ad_soyad']} | {r['lisans_no']} | {r['kulup_adi']}": (r["sporcu_id"], r["lisans_id"])
+                for r in rows
+                if r["sporcu_id"] not in kayitli
+            }
+            cb_sporcu["values"] = list(sporcu_map.keys())
+            if v_sporcu.get() not in sporcu_map:
+                v_sporcu.set("")
+            if sporcu_map and not v_sporcu.get():
+                v_sporcu.set(list(sporcu_map.keys())[0])
+
+        def refresh(_=None):
+            sec = v_yaris.get().strip()
+            yaris_id = self._yaris_map.get(sec) if sec else None
+            rows = db.yaris_kayitlari_listele(yaris_id)
+            _fill_tree(tree, rows)
+            refresh_sporcular(yaris_id)
+
+        def kayit_ekle_popup():
+            sec = v_yaris.get().strip()
+            yaris_id = self._yaris_map.get(sec) if sec else None
+            sporcu_info = sporcu_map.get(v_sporcu.get().strip())
+            if not yaris_id or not sporcu_info:
+                messagebox.showwarning(
+                    "Uyarı",
+                    "Kayıt için açık yarış ve sporcu seçimi zorunludur.",
+                    parent=win,
+                )
+                return
+            sporcu_id, lisans_id = sporcu_info
+            try:
+                db.yaris_kayit_ekle(
+                    yaris_id=yaris_id,
+                    sporcu_id=sporcu_id,
+                    lisans_id=lisans_id,
+                    kategori=v_kategori.get() or None,
+                )
+                refresh()
+                messagebox.showinfo("Başarılı", "Sporcu yarışa kaydedildi.", parent=win)
+            except Exception as exc:
+                messagebox.showerror("Hata", str(exc), parent=win)
+
+        def kayit_sil_popup():
+            sel = tree.selection()
+            if not sel:
+                messagebox.showwarning("Uyarı", "Silmek için bir kayıt seçin.", parent=win)
+                return
+            kayit_id = int(sel[0])
+            if not messagebox.askyesno("Onay", "Seçili yarış kaydı silinsin mi?", parent=win):
+                return
+            db.yaris_kayit_sil(kayit_id)
+            refresh()
+            messagebox.showinfo("Başarılı", "Yarış kaydı silindi.", parent=win)
+
+        def kayit_guncelle_popup():
+            sel = tree.selection()
+            if not sel:
+                messagebox.showwarning("Uyarı", "Güncellemek için bir kayıt seçin.", parent=win)
+                return
+            kayit_id = int(sel[0])
+            try:
+                db.yaris_kayit_guncelle(
+                    kayit_id,
+                    kategori=v_kategori.get() or None,
+                    durum=v_durum.get() or None,
+                )
+                refresh()
+                messagebox.showinfo("Başarılı", "Yarış kaydı güncellendi.", parent=win)
+            except Exception as exc:
+                messagebox.showerror("Hata", str(exc), parent=win)
+
+        ttk.Button(top, text="➕ Kaydı Oluştur", style="Add.TButton",
+                   command=kayit_ekle_popup).pack(side="left", padx=(4, 4))
+        ttk.Button(top, text="✏️ Seçili Kaydı Güncelle", style="Upd.TButton",
+               command=kayit_guncelle_popup).pack(side="left", padx=(0, 4))
+        ttk.Button(top, text="✖ Seçili Kaydı Sil", style="Del.TButton",
+                   command=kayit_sil_popup).pack(side="left", padx=(0, 4))
+        ttk.Button(top, text="Yenile", style="Neu.TButton",
+                   command=refresh).pack(side="left")
+
+        def on_tree_sec(_=None):
+            sel = tree.selection()
+            if not sel:
+                return
+            vals = tree.item(sel[0], "values")
+            if len(vals) >= 7:
+                v_kategori.set(vals[5] if vals[5] != "—" else "Elite")
+                v_durum.set(vals[6] or "Onaylandı")
+
+        tree.bind("<<TreeviewSelect>>", on_tree_sec)
+        cb.bind("<<ComboboxSelected>>", refresh)
+        refresh()
+
+
+# ---------------------------------------------------------------------------
 # Ana uygulama
 # ---------------------------------------------------------------------------
 
 class App(tk.Tk):
     def __init__(self):
         super().__init__()
+        # Sekmeler ilk açılışta sorgu yaptığı için DB önce hazır olmalı.
+        db.init_db()
         self.title("KTBF – Lisans Kayıt Sistemi")
-        self.geometry("1100x640")
+        self.geometry("1500x900+0+0")
         self.configure(bg=BG)
         self.resizable(True, True)
         _style_widget(self)
@@ -567,22 +1081,47 @@ class App(tk.Tk):
                  font=("Segoe UI", 13, "bold")).pack(side="left", pady=8)
 
         # Sekmeler
-        nb = ttk.Notebook(self)
-        nb.pack(fill="both", expand=True, padx=6, pady=6)
+        self.nb = ttk.Notebook(self)
+        self.nb.pack(fill="both", expand=True, padx=6, pady=6)
 
-        self.kulup_sekme  = KulupSekme(nb)
-        self.sporcu_sekme = SporcuSekme(nb)
+        self.kulup_sekme  = KulupSekme(self.nb)
+        self.sporcu_sekme = SporcuSekme(self.nb)
+        self.yaris_kayit_sekme = YarisKayitSekme(self.nb)
 
-        nb.add(self.kulup_sekme,  text="  🏢 Kulüpler  ")
-        nb.add(self.sporcu_sekme, text="  🚴 Sporcular  ")
+        self.nb.add(self.kulup_sekme,  text="  🏢 Kulüpler  ")
+        self.nb.add(self.sporcu_sekme, text="  🚴 Sporcular  ")
+        self.nb.add(self.yaris_kayit_sekme, text="  🏁 Yarış Kayıt  ")
 
-        # DB'yi başlat
-        db.init_db()
+        self._build_menu()
+
+    def _build_menu(self):
+        menubar = tk.Menu(self)
+
+        modul = tk.Menu(menubar, tearoff=0)
+        modul.add_command(label="Kulüpler", command=lambda: self._sekme_ac(0))
+        modul.add_command(label="Sporcular", command=lambda: self._sekme_ac(1))
+        modul.add_command(label="Yarış Kayıt", command=lambda: self._sekme_ac(2))
+        modul.add_separator()
+        modul.add_command(
+            label="Yarışa Kayıtlı Sporcular Penceresi",
+            command=self.yaris_kayit_sekme._kayit_penceresi_ac,
+        )
+
+        menubar.add_cascade(label="Modüller", menu=modul)
+        self.config(menu=menubar)
+
+    def _sekme_ac(self, index: int):
+        self.nb.select(index)
 
 
 def main():
+    _ensure_tcl_tk_env()
     app = App()
-    app.mainloop()
+    try:
+        app.mainloop()
+    except KeyboardInterrupt:
+        # Terminalden Ctrl+C ile kapatıldığında gereksiz traceback göstermeyelim.
+        pass
 
 
 if __name__ == "__main__":
