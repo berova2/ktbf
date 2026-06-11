@@ -222,6 +222,40 @@ CREATE TABLE IF NOT EXISTS yaris_kayitlari (
     kayit_tarihi    TEXT    NOT NULL DEFAULT (date('now')),
     UNIQUE(yaris_id, sporcu_id)
 );
+
+-- -------------------------------------------------------
+-- Sporcu sezon kategori tercihleri
+-- Yaş kategorisinden bir alt kategoriye geçiş burada saklanır.
+-- -------------------------------------------------------
+CREATE TABLE IF NOT EXISTS sporcu_sezon_kategorileri (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    sporcu_id       INTEGER NOT NULL REFERENCES sporcular(id) ON DELETE CASCADE,
+    sezon           TEXT    NOT NULL,
+    yas_kategorisi  TEXT    NOT NULL,
+    yaris_kategorisi TEXT   NOT NULL,
+    kayit_tarihi    TEXT    NOT NULL DEFAULT (date('now')),
+    UNIQUE(sporcu_id, sezon)
+);
+
+-- -------------------------------------------------------
+-- Evrak Kontrol Kayıtları
+-- Talimatlardan türetilen belge kontrol checklist kayıtları
+-- -------------------------------------------------------
+CREATE TABLE IF NOT EXISTS evrak_kontrol_kayitlari (
+    id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+    basvuru_turu        TEXT    NOT NULL,
+    referans_turu       TEXT    NOT NULL
+                                CHECK(referans_turu IN ('sporcu','kulup','serbest')),
+    referans_id         INTEGER NOT NULL DEFAULT 0,
+    sezon               TEXT    NOT NULL DEFAULT '',
+    belge_kodu          TEXT    NOT NULL,
+    belge_adi           TEXT    NOT NULL,
+    zorunlu             INTEGER NOT NULL DEFAULT 1 CHECK(zorunlu IN (0,1)),
+    teslim              INTEGER NOT NULL DEFAULT 0 CHECK(teslim IN (0,1)),
+    notlar              TEXT,
+    guncelleme_tarihi   TEXT    NOT NULL DEFAULT (date('now')),
+    UNIQUE(basvuru_turu, referans_turu, referans_id, sezon, belge_kodu)
+);
 """
 
 
@@ -301,6 +335,14 @@ def kulupler_dropdown() -> list:
     with get_conn() as conn:
         return conn.execute(
             "SELECT id, ad FROM kulupler WHERE durum='Aktif' ORDER BY ad"
+        ).fetchall()
+
+
+def sporcular_dropdown() -> list:
+    """GUI combobox için sporcuların (id, ad_soyad) listesini döner."""
+    with get_conn() as conn:
+        return conn.execute(
+            "SELECT id, ad || ' ' || soyad AS ad_soyad FROM sporcular ORDER BY soyad, ad"
         ).fetchall()
 
 
@@ -432,6 +474,39 @@ def lisans_durum_guncelle(lisans_id: int, durum: str,
                WHERE id=?""",
             (durum, federasyon_onay_tarihi, lisans_id)
         )
+
+
+def aktif_lisans_guncelle(sporcu_id: int, *, lisans_turu: str,
+                          sezon: str, kulup_id: int = None,
+                          saglik_raporu: int = 0,
+                          veli_muvafakati: int = 0,
+                          baska_federasyon_beyani: int = 0) -> bool:
+    """Sporcunun son aktif lisansındaki temel alanları günceller."""
+    with get_conn() as conn:
+        aktif = conn.execute(
+            """SELECT id FROM lisanslar
+               WHERE sporcu_id=? AND durum='Aktif'
+               ORDER BY id DESC LIMIT 1""",
+            (sporcu_id,)
+        ).fetchone()
+        if aktif is None:
+            return False
+        conn.execute(
+            """UPDATE lisanslar
+               SET lisans_turu=?, sezon=?, kulup_id=?,
+                   saglik_raporu=?, veli_muvafakati=?, baska_federasyon_beyani=?
+               WHERE id=?""",
+            (
+                lisans_turu,
+                sezon,
+                kulup_id,
+                saglik_raporu,
+                veli_muvafakati,
+                baska_federasyon_beyani,
+                aktif["id"],
+            )
+        )
+        return True
 
 
 def lisans_getir(lisans_id: int) -> Optional[sqlite3.Row]:
@@ -721,6 +796,7 @@ def aktif_lisansli_sporcular() -> list:
         return conn.execute(
             """SELECT s.id AS sporcu_id,
                       s.ad || ' ' || s.soyad AS ad_soyad,
+                      s.dogum_tarihi,
                       l.id AS lisans_id,
                       l.lisans_no,
                       COALESCE(k.ad, 'Ferdi') AS kulup_adi
@@ -733,6 +809,60 @@ def aktif_lisansli_sporcular() -> list:
                LEFT JOIN kulupler k ON k.id = l.kulup_id
                ORDER BY s.soyad, s.ad"""
         ).fetchall()
+
+
+def sporcu_sezon_kayitli_kategori(sporcu_id: int, sezon: str) -> Optional[str]:
+    """Sporcunun bu sezonda kayıtlı yarış kategorisini döner (varsa)."""
+    with get_conn() as conn:
+        row = conn.execute(
+            """SELECT yaris_kategorisi
+               FROM sporcu_sezon_kategorileri
+               WHERE sporcu_id = ? AND sezon = ?
+               ORDER BY id DESC LIMIT 1""",
+            (sporcu_id, sezon),
+        ).fetchone()
+        if row:
+            return row["yaris_kategorisi"]
+
+        row = conn.execute(
+            """SELECT yk.kategori
+               FROM yaris_kayitlari yk
+               JOIN yarislar y ON y.id = yk.yaris_id
+               WHERE yk.sporcu_id = ? AND y.sezon = ?
+               ORDER BY yk.id DESC LIMIT 1""",
+            (sporcu_id, sezon),
+        ).fetchone()
+    return row["kategori"] if row else None
+
+
+def sporcu_sezon_kategori_getir(sporcu_id: int, sezon: str) -> Optional[sqlite3.Row]:
+    with get_conn() as conn:
+        return conn.execute(
+            """SELECT *
+               FROM sporcu_sezon_kategorileri
+               WHERE sporcu_id = ? AND sezon = ?
+               ORDER BY id DESC LIMIT 1""",
+            (sporcu_id, sezon),
+        ).fetchone()
+
+
+def sporcu_sezon_kategori_ata(
+    sporcu_id: int,
+    sezon: str,
+    yas_kategorisi: str,
+    yaris_kategorisi: str,
+) -> None:
+    with get_conn() as conn:
+        conn.execute(
+            """INSERT INTO sporcu_sezon_kategorileri
+               (sporcu_id, sezon, yas_kategorisi, yaris_kategorisi)
+               VALUES (?,?,?,?)
+               ON CONFLICT(sporcu_id, sezon)
+               DO UPDATE SET
+                   yas_kategorisi=excluded.yas_kategorisi,
+                   yaris_kategorisi=excluded.yaris_kategorisi""",
+            (sporcu_id, sezon, yas_kategorisi, yaris_kategorisi),
+        )
 
 
 def yaris_kayit_ekle(yaris_id: int, sporcu_id: int, lisans_id: int = None,
@@ -824,6 +954,81 @@ def yaris_kayitlari_listele(yaris_id: int = None) -> list:
             params = (yaris_id,)
         sql += " ORDER BY COALESCE(y.tarih, '9999-12-31'), y.ad, sporcu"
         return conn.execute(sql, params).fetchall()
+
+
+def evrak_kontrol_getir(basvuru_turu: str, referans_turu: str,
+                        referans_id: int = 0, sezon: str = "") -> list:
+    with get_conn() as conn:
+        return conn.execute(
+            """SELECT belge_kodu, belge_adi, zorunlu, teslim, COALESCE(notlar, '') AS notlar
+               FROM evrak_kontrol_kayitlari
+               WHERE basvuru_turu=? AND referans_turu=? AND referans_id=? AND sezon=?
+               ORDER BY id""",
+            (basvuru_turu, referans_turu, referans_id, sezon),
+        ).fetchall()
+
+
+def evrak_kontrol_kaydet(basvuru_turu: str, referans_turu: str,
+                         kalemler: list[dict], referans_id: int = 0,
+                         sezon: str = "") -> None:
+    kodlar = [kalem["belge_kodu"] for kalem in kalemler]
+    with get_conn() as conn:
+        if kodlar:
+            yer_tutucular = ", ".join("?" for _ in kodlar)
+            conn.execute(
+                f"""DELETE FROM evrak_kontrol_kayitlari
+                   WHERE basvuru_turu=? AND referans_turu=? AND referans_id=? AND sezon=?
+                     AND belge_kodu NOT IN ({yer_tutucular})""",
+                (basvuru_turu, referans_turu, referans_id, sezon, *kodlar),
+            )
+        else:
+            conn.execute(
+                """DELETE FROM evrak_kontrol_kayitlari
+                   WHERE basvuru_turu=? AND referans_turu=? AND referans_id=? AND sezon=?""",
+                (basvuru_turu, referans_turu, referans_id, sezon),
+            )
+
+        for kalem in kalemler:
+            conn.execute(
+                """INSERT INTO evrak_kontrol_kayitlari
+                   (basvuru_turu, referans_turu, referans_id, sezon,
+                    belge_kodu, belge_adi, zorunlu, teslim, notlar, guncelleme_tarihi)
+                   VALUES (?,?,?,?,?,?,?,?,?, date('now'))
+                   ON CONFLICT(basvuru_turu, referans_turu, referans_id, sezon, belge_kodu)
+                   DO UPDATE SET
+                       belge_adi=excluded.belge_adi,
+                       zorunlu=excluded.zorunlu,
+                       teslim=excluded.teslim,
+                       notlar=excluded.notlar,
+                       guncelleme_tarihi=date('now')""",
+                (
+                    basvuru_turu,
+                    referans_turu,
+                    referans_id,
+                    sezon,
+                    kalem["belge_kodu"],
+                    kalem["belge_adi"],
+                    int(kalem.get("zorunlu", 1)),
+                    int(kalem.get("teslim", 0)),
+                    kalem.get("notlar") or None,
+                ),
+            )
+
+
+def evrak_kontrol_ozet_listele() -> list:
+    with get_conn() as conn:
+        return conn.execute(
+            """SELECT basvuru_turu,
+                      referans_turu,
+                      referans_id,
+                      sezon,
+                      SUM(CASE WHEN teslim = 1 THEN 1 ELSE 0 END) AS tamamlanan,
+                      COUNT(*) AS toplam,
+                      MAX(guncelleme_tarihi) AS guncelleme_tarihi
+               FROM evrak_kontrol_kayitlari
+               GROUP BY basvuru_turu, referans_turu, referans_id, sezon
+               ORDER BY MAX(guncelleme_tarihi) DESC, basvuru_turu, referans_id"""
+        ).fetchall()
 
 
 if __name__ == "__main__":
