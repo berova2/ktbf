@@ -283,14 +283,25 @@ def init_db():
 
 def kulup_ekle(ad: str, yetkili_adi: str = None, telefon: str = None,
                adres: str = None, email: str = None, forma_renk: str = None,
-               sezon: str = None) -> int:
+               sezon: str = None, durum: str = "Aktif",
+               aidat_odendi: int = 0) -> int:
     """Yeni kulüp kaydı ekler; döndürülen değer yeni satırın id'sidir."""
     with get_conn() as conn:
         cur = conn.execute(
             """INSERT INTO kulupler (ad, yetkili_adi, telefon, adres, email,
-               forma_renk, sezon)
-               VALUES (?,?,?,?,?,?,?)""",
-            (ad, yetkili_adi, telefon, adres, email, forma_renk, sezon)
+               forma_renk, sezon, durum, aidat_odendi)
+               VALUES (?,?,?,?,?,?,?,?,?)""",
+            (
+                ad,
+                yetkili_adi,
+                telefon,
+                adres,
+                email,
+                forma_renk,
+                sezon,
+                durum,
+                aidat_odendi,
+            )
         )
         return cur.lastrowid
 
@@ -323,11 +334,15 @@ def kulup_getir(kulup_id: int) -> Optional[sqlite3.Row]:
 
 def kulupler_listele(durum: str = None) -> list:
     with get_conn() as conn:
+        sql = (
+            "SELECT id, ad, yetkili_adi, telefon, sezon, durum, "
+            "COALESCE(aidat_odendi, 0) AS aidat_odendi FROM kulupler"
+        )
         if durum:
             return conn.execute(
-                "SELECT * FROM kulupler WHERE durum=? ORDER BY ad", (durum,)
+                sql + " WHERE durum=? ORDER BY ad", (durum,)
             ).fetchall()
-        return conn.execute("SELECT * FROM kulupler ORDER BY ad").fetchall()
+        return conn.execute(sql + " ORDER BY ad").fetchall()
 
 
 def kulupler_dropdown() -> list:

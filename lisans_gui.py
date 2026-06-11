@@ -298,6 +298,8 @@ class KulupSekme(ttk.Frame):
             email=self.v_email.get() or None,
             forma_renk=self.v_renk.get() or None,
             sezon=self.v_sezon.get() or None,
+            durum=self.v_durum.get(),
+            aidat_odendi=self.v_aidat.get(),
         )
         self._temizle()
         self._listele()
