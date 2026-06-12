@@ -7,9 +7,14 @@ Kullanım: python lisans_gui.py
 import os
 import sys
 import ctypes
+import subprocess
+import time
 from datetime import date
+import tempfile
 import tkinter as tk
 from tkinter import ttk, messagebox
+import urllib.request
+import webbrowser
 import lisans_db as db
 
 # ---------------------------------------------------------------------------
@@ -241,6 +246,8 @@ class KulupSekme(ttk.Frame):
                command=self._sil).pack(side="left", padx=4)
         ttk.Button(btn, text="🔄 Temizle", style="Neu.TButton",
                    command=self._temizle).pack(side="left", padx=4)
+        ttk.Button(btn, text="🧾 Kayıt Formu Üret", style="Neu.TButton",
+               command=self._kulup_form_onizleme_ac).pack(side="left", padx=4)
 
         # Sağ: liste
         list_frame = ttk.LabelFrame(pane, text="Kulüp Listesi", padding=4)
@@ -347,6 +354,99 @@ class KulupSekme(ttk.Frame):
         self.v_aidat.set(0)
         self._secili_id = None
         self.tree.selection_remove(*self.tree.selection())
+
+    def _kulup_form_metni_olustur(self) -> str:
+        kulup_adi = self.v_ad.get().strip()
+        if not kulup_adi:
+            raise ValueError("Form üretmek için önce Kulüp Adı girin.")
+
+        bugun = date.today().strftime("%d.%m.%Y")
+        satirlar = [
+            "KIBRIS TÜRK BİSİKLET FEDERASYONU",
+            "KULÜP YENİDEN KAYIT / AKTİF ÜYELİK BAŞVURU FORMU",
+            "=" * 64,
+            f"Tarih              : {bugun}",
+            f"Kulüp Adı          : {kulup_adi}",
+            f"Yetkili Adı        : {self.v_yetkili.get().strip() or '—'}",
+            f"Telefon            : {self.v_tel.get().strip() or '—'}",
+            f"E-posta            : {self.v_email.get().strip() or '—'}",
+            f"Adres              : {self.v_adres.get().strip() or '—'}",
+            f"Forma Rengi        : {self.v_renk.get().strip() or '—'}",
+            f"Sezon              : {self.v_sezon.get().strip() or '—'}",
+            f"Durum              : {self.v_durum.get().strip() or '—'}",
+            f"Aidat Durumu       : {'Ödendi' if self.v_aidat.get() else 'Ödenmedi'}",
+            "",
+            "Gerekli Evrak Kontrolü:",
+            "01. [ ] Kulüp yeniden kayıt / aktif üyelik başvuru formu",
+            "02. [ ] Kulüp yetkili ve iletişim bilgileri",
+            "03. [ ] Aidat ödeme / üyelik durumu teyidi",
+            "",
+            "Kulüp Yetkilisi İmza : ____________________",
+            "Federasyon Onay      : ____________________",
+        ]
+        return "\n".join(satirlar)
+
+    def _kulup_form_onizleme_ac(self):
+        try:
+            metin = self._kulup_form_metni_olustur()
+        except ValueError as exc:
+            messagebox.showwarning("Uyarı", str(exc))
+            return
+
+        wnd = tk.Toplevel(self)
+        wnd.title("Kulüp Kayıt Formu Önizleme")
+        wnd.configure(bg=BG)
+        wnd.geometry("860x680")
+
+        txt = tk.Text(wnd, wrap="word", font=("Consolas", 11))
+        txt.pack(fill="both", expand=True, padx=8, pady=(8, 4))
+        txt.insert("1.0", metin)
+
+        alt = ttk.Frame(wnd)
+        alt.pack(fill="x", padx=8, pady=(0, 8))
+        ttk.Button(alt, text="💾 TXT Olarak Kaydet", style="Neu.TButton",
+                   command=lambda: self._kulup_formu_kaydet(txt.get("1.0", "end-1c"), sor=True)).pack(side="left", padx=4)
+        ttk.Button(alt, text="🖨 Yazdır", style="Neu.TButton",
+                   command=lambda: self._kulup_formu_yazdir(txt.get("1.0", "end-1c"))).pack(side="left", padx=4)
+        ttk.Button(alt, text="Kapat", style="Neu.TButton",
+                   command=wnd.destroy).pack(side="right", padx=4)
+
+    def _kulup_formu_kaydet(self, icerik: str, sor: bool = False) -> str:
+        if sor:
+            from tkinter import filedialog
+            yol = filedialog.asksaveasfilename(
+                title="Kulüp formunu kaydet",
+                defaultextension=".txt",
+                filetypes=[("Metin Dosyası", "*.txt"), ("Tüm Dosyalar", "*.*")],
+                initialfile="kulup_yeniden_kayit_formu.txt",
+            )
+            if not yol:
+                return ""
+        else:
+            fd, yol = tempfile.mkstemp(prefix="ktbf_kulup_form_", suffix=".txt")
+            os.close(fd)
+        with open(yol, "w", encoding="utf-8") as dosya:
+            dosya.write(icerik)
+        return yol
+
+    def _kulup_formu_yazdir(self, icerik: str | None = None):
+        try:
+            metin = icerik if icerik is not None else self._kulup_form_metni_olustur()
+        except ValueError as exc:
+            messagebox.showwarning("Uyarı", str(exc))
+            return
+
+        try:
+            yol = self._kulup_formu_kaydet(metin, sor=False)
+            if not yol:
+                return
+            if os.name == "nt":
+                os.startfile(yol, "print")
+                messagebox.showinfo("Yazdırma", "Kulüp kayıt formu yazdırma komutu gönderildi.")
+            else:
+                messagebox.showinfo("Bilgi", f"Yazdırma yalnızca Windows'ta otomatik desteklenir.\nDosya: {yol}")
+        except Exception as exc:
+            messagebox.showerror("Hata", f"Kulüp kayıt formu yazdırılamadı: {exc}")
 
 
 # ---------------------------------------------------------------------------
@@ -1490,6 +1590,13 @@ class EvrakKontrolSekme(ttk.Frame):
         "Kulüp Üyelik / Aktif Üyelik": {
             "referans_turu": "kulup",
             "kaynak": "KT_Bisiklet_Federasyonu_Üyelik_Talimatı ve kulüp başvuru formu",
+            "formlar": [
+                ("EK-K1", "Kulüp yeniden kayıt / aktif üyelik başvuru formu",
+                 "KULÜP YENİDEN KAYIT / AKTİF ÜYELİK BAŞVURU FORMU"),
+                ("EK-K2", "Kulüp yetkili ve iletişim bilgileri formu",
+                 "KULÜP YETKİLİ VE İLETİŞİM BİLGİLERİ FORMU"),
+                ("EK-K3", "Kulüp tescil fişi", "KULÜP TESCİL FİŞİ"),
+            ],
             "belgeler": [
                 ("uyelik_formu", "Kulüp yeniden kayıt / aktif üyelik başvuru formu", 1),
                 ("yetkili_bilgileri", "Kulüp yetkili ve iletişim bilgileri", 1),
@@ -1499,6 +1606,11 @@ class EvrakKontrolSekme(ttk.Frame):
         "Sporcu Lisans Başvurusu": {
             "referans_turu": "sporcu",
             "kaynak": "Sporcu_Lisans_Talimatı Madde 7, 7A, 8 ve EK-1",
+            "formlar": [
+                ("EK-1", "Sporcu lisans başvuru formu", "SPORCU LİSANS BAŞVURU FORMU"),
+                ("EK-7", "Veli muvafakatname örneği", "EK-7 VELİ MUVAFAKATNAME FORMU"),
+                ("EK-VI1", "Veli izni şablonu", "VELİ İZİN FORMU"),
+            ],
             "belgeler": [
                 ("spor_dairesi_kaydi", "Spor Dairesi BYS kaydı", 1),
                 ("saglik_raporu", "Sağlık raporu", 1),
@@ -1509,6 +1621,9 @@ class EvrakKontrolSekme(ttk.Frame):
         "Vize / Lisans Yenileme": {
             "referans_turu": "sporcu",
             "kaynak": "Sporcu_Lisans_Talimatı EK-4",
+            "formlar": [
+                ("EK-4", "Vize / lisans yenileme formu", "VİZE / LİSANS YENİLEME BAŞVURU FORMU"),
+            ],
             "belgeler": [
                 ("saglik_raporu", "Sağlık raporu", 1),
                 ("eski_lisans_teslim", "Eski lisans teslimi", 1),
@@ -1518,6 +1633,10 @@ class EvrakKontrolSekme(ttk.Frame):
         "Transfer Başvurusu": {
             "referans_turu": "sporcu",
             "kaynak": "Sporcu_Lisans_Talimatı Madde 9",
+            "formlar": [
+                ("TR-1", "Transfer talep formu", "SPORCU TRANSFER TALEP FORMU"),
+                ("TR-2", "İlişiksizlik belgesi örneği", "İLİŞİKSİZLİK BELGESİ"),
+            ],
             "belgeler": [
                 ("ilizsizlik_belgesi", "İlişiksizlik belgesi", 1),
             ],
@@ -1525,6 +1644,9 @@ class EvrakKontrolSekme(ttk.Frame):
         "Yurt Dışı Yarış İzni": {
             "referans_turu": "sporcu",
             "kaynak": "Sporcu_Lisans_Talimatı Madde 10-11 ve EK-3",
+            "formlar": [
+                ("EK-3", "Yurt dışı yarış izin başvuru formu", "YURT DIŞI YARIŞ İZİN BAŞVURU FORMU"),
+            ],
             "belgeler": [
                 ("kulup_yazisi", "Kulüp yazısı / organizasyon onayı", 1),
             ],
@@ -1532,6 +1654,10 @@ class EvrakKontrolSekme(ttk.Frame):
         "Yabancı Uyruklu / Misafir Sporcu": {
             "referans_turu": "sporcu",
             "kaynak": "Yabanci_Uyruklu_Misafir_Sporcu_Talimati",
+            "formlar": [
+                ("YU-1", "Yabancı uyruklu / misafir sporcu başvuru formu",
+                 "YABANCI UYRUKLU / MİSAFİR SPORCU BAŞVURU FORMU"),
+            ],
             "belgeler": [
                 ("pasaport_kimlik", "Pasaport / kimlik belgesi", 1),
                 ("yabanci_lisans", "Yabancı federasyon lisans bilgisi", 1),
@@ -1541,6 +1667,11 @@ class EvrakKontrolSekme(ttk.Frame):
         "Yabancı Federasyon Lisanslı KKTC Vatandaşı": {
             "referans_turu": "sporcu",
             "kaynak": "KTBF_Yabanci_Federasyon_Lisansli_KKTC_Vatandasi_Sporcular_Talimati",
+            "formlar": [
+                ("YF-1", "Yabancı federasyon lisanslı KKTC vatandaşı sporcu formu",
+                 "YABANCI FEDERASYON LİSANSLI KKTC VATANDAŞI SPORCU BAŞVURU FORMU"),
+                ("YF-2", "Kulüp muvafakatname örneği", "KULÜP MUVAFAKATNAME ÖRNEĞİ"),
+            ],
             "belgeler": [
                 ("yabanci_lisans", "Yabancı federasyon lisans bilgisi", 1),
                 ("gecerlilik_tarihi", "Lisans geçerlilik tarihi teyidi", 1),
@@ -1555,6 +1686,8 @@ class EvrakKontrolSekme(ttk.Frame):
         self._kulup_map: dict[str, int] = {}
         self._evrak_satirlari: dict[str, dict] = {}
         self._ozet_map: dict[str, dict] = {}
+        self._aktif_form_map: dict[str, dict] = {}
+        self._son_form_dosyasi = ""
         self._build()
         self._referanslari_yukle()
         self._basvuru_turlerini_yukle()
@@ -1607,8 +1740,27 @@ class EvrakKontrolSekme(ttk.Frame):
         self.lbl_kaynak.grid(row=2, column=1, columnspan=3,
                              sticky="w", padx=(0, 8), pady=4)
 
+        ttk.Label(ust, text="Talimat Eki Formu").grid(
+            row=3, column=0, sticky="e", padx=(8, 4), pady=4)
+        self.v_form_ornek = tk.StringVar()
+        self.cb_form_ornek = ttk.Combobox(
+            ust,
+            textvariable=self.v_form_ornek,
+            state="readonly",
+            width=34,
+            values=[],
+        )
+        self.cb_form_ornek.grid(row=3, column=1, sticky="ew", padx=(0, 8), pady=4)
+
+        frm_actions = ttk.Frame(ust)
+        frm_actions.grid(row=3, column=2, columnspan=2, sticky="w", pady=4)
+        ttk.Button(frm_actions, text="🧾 Form Üret", style="Neu.TButton",
+                   command=self._form_onizleme_ac).pack(side="left", padx=4)
+        ttk.Button(frm_actions, text="🖨 Form Yazdır", style="Neu.TButton",
+                   command=self._formu_yazdir).pack(side="left", padx=4)
+
         aksiyon = ttk.Frame(ust)
-        aksiyon.grid(row=3, column=0, columnspan=4, sticky="w", pady=(8, 0))
+        aksiyon.grid(row=4, column=0, columnspan=4, sticky="w", pady=(8, 0))
         ttk.Button(aksiyon, text="💾 Kontrolü Kaydet", style="Add.TButton",
                    command=self._kaydet).pack(side="left", padx=4)
         ttk.Button(aksiyon, text="🔄 Kayıtları Yükle", style="Neu.TButton",
@@ -1676,8 +1828,28 @@ class EvrakKontrolSekme(ttk.Frame):
         self.lbl_kaynak.config(text=kural["kaynak"])
         self.cb_sporcu.configure(state="readonly" if referans_turu == "sporcu" else "disabled")
         self.cb_kulup.configure(state="readonly" if referans_turu == "kulup" else "disabled")
+        self._basvuru_formlarini_yukle()
         self._evrak_satirlarini_olustur()
         self._mevcut_kaydi_yukle()
+
+    def _basvuru_formlarini_yukle(self):
+        self._aktif_form_map.clear()
+        gorunenler = []
+        for form_kodu, form_adi, baslik in self._aktif_kural().get("formlar", []):
+            gorunen = f"{form_kodu} - {form_adi}"
+            gorunenler.append(gorunen)
+            self._aktif_form_map[gorunen] = {
+                "kod": form_kodu,
+                "ad": form_adi,
+                "baslik": baslik,
+            }
+        self.cb_form_ornek["values"] = gorunenler
+        if gorunenler:
+            self.v_form_ornek.set(gorunenler[0])
+            self.cb_form_ornek.configure(state="readonly")
+        else:
+            self.v_form_ornek.set("")
+            self.cb_form_ornek.configure(state="disabled")
 
     def _evrak_satirlarini_olustur(self):
         for child in self.frm_evrak.winfo_children():
@@ -1830,6 +2002,388 @@ class EvrakKontrolSekme(ttk.Frame):
         self.v_sezon.set("2026")
         self._satirlari_sifirla()
 
+    def _secili_referans_adi(self) -> str:
+        referans_turu = self._aktif_kural()["referans_turu"]
+        if referans_turu == "sporcu":
+            return self.v_sporcu.get().strip() or "—"
+        if referans_turu == "kulup":
+            return self.v_kulup.get().strip() or "—"
+        return "Genel"
+
+    def _form_icerik_olustur(self) -> str:
+        secim = self.v_form_ornek.get().strip()
+        if not secim:
+            raise ValueError("Seçili başvuru türü için talimat eki formu bulunmuyor.")
+        ornek = self._aktif_form_map.get(secim)
+        if not ornek:
+            raise ValueError("Seçilen form örneği bulunamadı.")
+
+        referans_adi = self._secili_referans_adi()
+        sezon = self.v_sezon.get().strip() or "—"
+        basvuru = self.v_basvuru.get().strip() or "—"
+        bugun = date.today().strftime("%d.%m.%Y")
+
+        if ornek["kod"] == "EK-7":
+            satirlar = [
+                "EK-7 VELİ MUVAFAKATNAME FORMU",
+                "",
+                "Tarih: ............................",
+                "",
+                "KKTC Bisiklet Federasyonu Başkanlığı'na,",
+                "",
+                "Velisi bulunduğum aşağıda bilgileri yer alan sporcunun, KKTC Bisiklet Federasyonu",
+                "tarafından düzenlenen antrenman, yarış, kamp ve diğer sportif faaliyetlere katılmasına",
+                "izin verdiğimi beyan ederim.",
+                "",
+                "Sporcunun Adı Soyadı : ..........................................................",
+                "Kimlik No            : ..........................................................",
+                "Doğum Tarihi         : ..........................................................",
+                "Kulübü               : ..........................................................",
+                "",
+                "Velinin;",
+                "",
+                "Adı Soyadı : ....................................................................",
+                "Telefon    : ....................................................................",
+                "Adres      : ....................................................................",
+                "",
+                "İşbu muvafakatnameyi kendi rızam ile imzaladığımı kabul ederim.",
+                "",
+                "Veli / Yasal Temsilci",
+                "İmza:",
+            ]
+            return "\n".join(satirlar)
+
+        satirlar = [
+            "KIBRIS TÜRK BİSİKLET FEDERASYONU",
+            ornek["baslik"],
+            "=" * 60,
+            f"Tarih           : {bugun}",
+            f"Sezon           : {sezon}",
+            f"Başvuru Türü    : {basvuru}",
+            f"Talimat Eki     : {ornek['kod']} ({ornek['ad']})",
+            f"İlgili Kayıt    : {referans_adi}",
+            "",
+            "Teslim Evrakları:",
+        ]
+
+        for index, (_, belge_adi, zorunlu) in enumerate(self._aktif_kural()["belgeler"], start=1):
+            tip = "Zorunlu" if zorunlu else "Opsiyonel"
+            satirlar.append(f"{index:02d}. [ ] {belge_adi} ({tip})")
+
+        satirlar.extend([
+            "",
+            "Açıklama:",
+            "................................................................",
+            "................................................................",
+            "",
+            "Başvuru Sahibi İmza : ____________________",
+            "Kontrol Eden İmza   : ____________________",
+        ])
+        return "\n".join(satirlar)
+
+    def _form_onizleme_ac(self):
+        try:
+            icerik = self._form_icerik_olustur()
+        except ValueError as exc:
+            messagebox.showwarning("Uyarı", str(exc))
+            return
+
+        wnd = tk.Toplevel(self)
+        wnd.title("Form Önizleme")
+        wnd.configure(bg=BG)
+        wnd.geometry("860x680")
+
+        txt = tk.Text(wnd, wrap="word", font=("Consolas", 11))
+        txt.pack(fill="both", expand=True, padx=8, pady=(8, 4))
+        txt.insert("1.0", icerik)
+
+        alt = ttk.Frame(wnd)
+        alt.pack(fill="x", padx=8, pady=(0, 8))
+        ttk.Button(alt, text="💾 TXT Olarak Kaydet", style="Neu.TButton",
+                   command=lambda: self._formu_dosyaya_yaz(txt.get("1.0", "end-1c"), sor=True)).pack(side="left", padx=4)
+        ttk.Button(alt, text="🖨 Yazdır", style="Neu.TButton",
+                   command=lambda: self._formu_yazdir(txt.get("1.0", "end-1c"))).pack(side="left", padx=4)
+        ttk.Button(alt, text="Kapat", style="Neu.TButton",
+                   command=wnd.destroy).pack(side="right", padx=4)
+
+    def _formu_dosyaya_yaz(self, icerik: str, sor: bool = False) -> str:
+        if sor:
+            from tkinter import filedialog
+            yol = filedialog.asksaveasfilename(
+                title="Formu kaydet",
+                defaultextension=".txt",
+                filetypes=[("Metin Dosyası", "*.txt"), ("Tüm Dosyalar", "*.*")],
+                initialfile="evrak_form_ornegi.txt",
+            )
+            if not yol:
+                return ""
+        else:
+            fd, yol = tempfile.mkstemp(prefix="ktbf_form_", suffix=".txt")
+            os.close(fd)
+        with open(yol, "w", encoding="utf-8") as dosya:
+            dosya.write(icerik)
+        self._son_form_dosyasi = yol
+        return yol
+
+    def _formu_yazdir(self, icerik: str | None = None):
+        try:
+            metin = icerik if icerik is not None else self._form_icerik_olustur()
+        except ValueError as exc:
+            messagebox.showwarning("Uyarı", str(exc))
+            return
+
+        try:
+            yol = self._formu_dosyaya_yaz(metin, sor=False)
+            if not yol:
+                return
+            if os.name == "nt":
+                os.startfile(yol, "print")
+                messagebox.showinfo("Yazdırma", "Form yazdırma komutu gönderildi.")
+            else:
+                messagebox.showinfo("Bilgi", f"Yazdırma yalnızca Windows'ta otomatik desteklenir.\nDosya: {yol}")
+        except Exception as exc:
+            messagebox.showerror("Hata", f"Form yazdırılamadı: {exc}")
+
+
+class EvrakSablonPenceresi(tk.Toplevel):
+    def __init__(self, parent: tk.Misc):
+        super().__init__(parent)
+        self.title("Evrak Şablonları")
+        self.configure(bg=BG)
+        self.geometry("1160x740")
+        self.minsize(980, 620)
+
+        self.v_basvuru_filtre = tk.StringVar(value="Tümü")
+        self.v_sezon = tk.StringVar(value="2026")
+        self.v_referans = tk.StringVar()
+        self._sablon_map: dict[str, dict] = {}
+
+        self._build()
+        self._listeyi_yenile()
+
+    def _build(self):
+        ust = ttk.LabelFrame(self, text="Evrak Şablonları", padding=8)
+        ust.pack(fill="x", padx=8, pady=(8, 4))
+
+        ttk.Label(ust, text="Başvuru Filtresi").grid(
+            row=0, column=0, sticky="e", padx=(8, 4), pady=4)
+        cb = ttk.Combobox(
+            ust,
+            textvariable=self.v_basvuru_filtre,
+            state="readonly",
+            width=38,
+            values=["Tümü", *EvrakKontrolSekme.BASVURU_TURLERI.keys()],
+        )
+        cb.grid(row=0, column=1, sticky="ew", padx=(0, 8), pady=4)
+        cb.bind("<<ComboboxSelected>>", lambda _=None: self._listeyi_yenile())
+
+        ttk.Label(ust, text="Sezon").grid(
+            row=0, column=2, sticky="e", padx=(8, 4), pady=4)
+        ttk.Entry(ust, textvariable=self.v_sezon, width=12).grid(
+            row=0, column=3, sticky="w", padx=(0, 8), pady=4)
+
+        ttk.Label(ust, text="İlgili Kayıt").grid(
+            row=1, column=0, sticky="e", padx=(8, 4), pady=4)
+        ttk.Entry(ust, textvariable=self.v_referans, width=44).grid(
+            row=1, column=1, sticky="ew", padx=(0, 8), pady=4)
+
+        btn = ttk.Frame(ust)
+        btn.grid(row=1, column=2, columnspan=2, sticky="w", pady=4)
+        ttk.Button(btn, text="🧾 Seçili Şablonu Üret", style="Neu.TButton",
+                   command=self._seciliyi_onizle).pack(side="left", padx=4)
+        ttk.Button(btn, text="💾 TXT Kaydet", style="Neu.TButton",
+                   command=self._seciliyi_kaydet).pack(side="left", padx=4)
+        ttk.Button(btn, text="🖨 Yazdır", style="Neu.TButton",
+                   command=self._seciliyi_yazdir).pack(side="left", padx=4)
+
+        ust.columnconfigure(1, weight=1)
+
+        govde = ttk.PanedWindow(self, orient="horizontal")
+        govde.pack(fill="both", expand=True, padx=8, pady=(4, 8))
+
+        sol = ttk.LabelFrame(govde, text="Talimat Eki Şablon Listesi", padding=4)
+        govde.add(sol, weight=2)
+
+        cols = [
+            ("basvuru", "Başvuru Türü", 220),
+            ("ek", "Ek Kodu", 70),
+            ("form", "Form Adı", 240),
+            ("kaynak", "Talimat Kaynağı", 260),
+        ]
+        tf, self.tree = _make_tree(sol, cols)
+        tf.pack(fill="both", expand=True)
+        self.tree.bind("<<TreeviewSelect>>", self._on_sec)
+
+        sag = ttk.LabelFrame(govde, text="Şablon Önizleme", padding=4)
+        govde.add(sag, weight=3)
+        self.txt = tk.Text(sag, wrap="word", font=("Consolas", 11))
+        self.txt.pack(fill="both", expand=True)
+
+    def _listeyi_yenile(self):
+        self.tree.delete(*self.tree.get_children())
+        self._sablon_map.clear()
+        filtre = self.v_basvuru_filtre.get().strip() or "Tümü"
+
+        index = 0
+        for basvuru, kural in EvrakKontrolSekme.BASVURU_TURLERI.items():
+            if filtre != "Tümü" and basvuru != filtre:
+                continue
+            for form_kodu, form_adi, form_baslik in kural.get("formlar", []):
+                iid = f"{basvuru}|{form_kodu}|{index}"
+                self._sablon_map[iid] = {
+                    "basvuru": basvuru,
+                    "kaynak": kural.get("kaynak", "—"),
+                    "form_kodu": form_kodu,
+                    "form_adi": form_adi,
+                    "form_baslik": form_baslik,
+                    "belgeler": list(kural.get("belgeler", [])),
+                }
+                tag = "even" if index % 2 == 0 else "odd"
+                self.tree.insert(
+                    "",
+                    "end",
+                    iid=iid,
+                    values=(basvuru, form_kodu, form_adi, kural.get("kaynak", "—")),
+                    tags=(tag,),
+                )
+                index += 1
+
+        secimler = self.tree.get_children()
+        if secimler:
+            self.tree.selection_set(secimler[0])
+            self._seciliyi_onizle()
+        else:
+            self.txt.delete("1.0", "end")
+            self.txt.insert("1.0", "Bu filtre için tanımlı şablon bulunamadı.")
+
+    def _on_sec(self, _=None):
+        self._seciliyi_onizle()
+
+    def _secili_sablon(self):
+        sec = self.tree.selection()
+        if not sec:
+            return None
+        return self._sablon_map.get(sec[0])
+
+    def _sablon_metni_uret(self, sablon: dict) -> str:
+        bugun = date.today().strftime("%d.%m.%Y")
+        referans = self.v_referans.get().strip() or "—"
+        sezon = self.v_sezon.get().strip() or "—"
+
+        if sablon["form_kodu"] == "EK-7":
+            satirlar = [
+                "EK-7 VELİ MUVAFAKATNAME FORMU",
+                "",
+                "Tarih: ............................",
+                "",
+                "KKTC Bisiklet Federasyonu Başkanlığı'na,",
+                "",
+                "Velisi bulunduğum aşağıda bilgileri yer alan sporcunun, KKTC Bisiklet Federasyonu",
+                "tarafından düzenlenen antrenman, yarış, kamp ve diğer sportif faaliyetlere katılmasına",
+                "izin verdiğimi beyan ederim.",
+                "",
+                "Sporcunun Adı Soyadı : ..........................................................",
+                "Kimlik No            : ..........................................................",
+                "Doğum Tarihi         : ..........................................................",
+                "Kulübü               : ..........................................................",
+                "",
+                "Velinin;",
+                "",
+                "Adı Soyadı : ....................................................................",
+                "Telefon    : ....................................................................",
+                "Adres      : ....................................................................",
+                "",
+                "İşbu muvafakatnameyi kendi rızam ile imzaladığımı kabul ederim.",
+                "",
+                "Veli / Yasal Temsilci",
+                "İmza:",
+            ]
+            return "\n".join(satirlar)
+
+        satirlar = [
+            "KIBRIS TÜRK BİSİKLET FEDERASYONU",
+            sablon["form_baslik"],
+            "=" * 68,
+            f"Tarih           : {bugun}",
+            f"Sezon           : {sezon}",
+            f"Başvuru Türü    : {sablon['basvuru']}",
+            f"Talimat Eki     : {sablon['form_kodu']} - {sablon['form_adi']}",
+            f"Talimat Kaynağı : {sablon['kaynak']}",
+            f"İlgili Kayıt    : {referans}",
+            "",
+            "Teslim Evrakları:",
+        ]
+        for i, (_, belge_adi, zorunlu) in enumerate(sablon["belgeler"], start=1):
+            tip = "Zorunlu" if zorunlu else "Opsiyonel"
+            satirlar.append(f"{i:02d}. [ ] {belge_adi} ({tip})")
+
+        satirlar.extend([
+            "",
+            "Açıklama:",
+            "................................................................",
+            "................................................................",
+            "",
+            "Başvuru Sahibi İmza : ____________________",
+            "Kontrol Eden İmza   : ____________________",
+        ])
+        return "\n".join(satirlar)
+
+    def _seciliyi_onizle(self):
+        sablon = self._secili_sablon()
+        if not sablon:
+            messagebox.showwarning("Uyarı", "Önce listeden bir şablon seçin.", parent=self)
+            return
+        metin = self._sablon_metni_uret(sablon)
+        self.txt.delete("1.0", "end")
+        self.txt.insert("1.0", metin)
+
+    def _dosyaya_kaydet(self, icerik: str, sor: bool = False) -> str:
+        if sor:
+            from tkinter import filedialog
+            yol = filedialog.asksaveasfilename(
+                title="Evrak şablonunu kaydet",
+                defaultextension=".txt",
+                filetypes=[("Metin Dosyası", "*.txt"), ("Tüm Dosyalar", "*.*")],
+                initialfile="evrak_sablonu.txt",
+                parent=self,
+            )
+            if not yol:
+                return ""
+        else:
+            fd, yol = tempfile.mkstemp(prefix="ktbf_evrak_sablon_", suffix=".txt")
+            os.close(fd)
+        with open(yol, "w", encoding="utf-8") as dosya:
+            dosya.write(icerik)
+        return yol
+
+    def _seciliyi_kaydet(self):
+        sablon = self._secili_sablon()
+        if not sablon:
+            messagebox.showwarning("Uyarı", "Önce listeden bir şablon seçin.", parent=self)
+            return
+        metin = self._sablon_metni_uret(sablon)
+        yol = self._dosyaya_kaydet(metin, sor=True)
+        if yol:
+            messagebox.showinfo("Başarılı", f"Şablon dosyası kaydedildi.\n{yol}", parent=self)
+
+    def _seciliyi_yazdir(self):
+        sablon = self._secili_sablon()
+        if not sablon:
+            messagebox.showwarning("Uyarı", "Önce listeden bir şablon seçin.", parent=self)
+            return
+        try:
+            metin = self._sablon_metni_uret(sablon)
+            yol = self._dosyaya_kaydet(metin, sor=False)
+            if not yol:
+                return
+            if os.name == "nt":
+                os.startfile(yol, "print")
+                messagebox.showinfo("Yazdırma", "Evrak şablonu yazdırma komutu gönderildi.", parent=self)
+            else:
+                messagebox.showinfo("Bilgi", f"Yazdırma yalnızca Windows'ta otomatik desteklenir.\nDosya: {yol}", parent=self)
+        except Exception as exc:
+            messagebox.showerror("Hata", f"Şablon yazdırılamadı: {exc}", parent=self)
+
 
 # ---------------------------------------------------------------------------
 # Ana uygulama
@@ -1853,6 +2407,8 @@ class App(tk.Tk):
                  text="  🚴 Kıbrıs Türk Bisiklet Federasyonu – Lisans Kayıt Sistemi",
                  bg=HEADER, fg="white",
              font=FONT_H).pack(side="left", pady=_scaled(4))
+        ttk.Button(hdr, text="🌐 Anasayfa", style="Neu.TButton",
+                   command=self._anasayfa_penceresi_ac).pack(side="right", padx=4, pady=_scaled(4))
 
         # Sekmeler
         self.nb = ttk.Notebook(self)
@@ -1861,15 +2417,71 @@ class App(tk.Tk):
         self.kulup_sekme  = KulupSekme(self.nb)
         self.sporcu_sekme = SporcuSekme(self.nb)
         self.yaris_kayit_sekme = YarisKayitSekme(self.nb)
-        self.evrak_kontrol_sekme = EvrakKontrolSekme(self.nb)
 
         self.nb.add(self.kulup_sekme,  text="  🏢 Kulüpler  ")
         self.nb.add(self.sporcu_sekme, text="  🚴 Sporcular  ")
         self.nb.add(self.yaris_kayit_sekme, text="  🏁 Yarış Kayıt  ")
-        self.nb.add(self.evrak_kontrol_sekme, text="  📋 Evrak Kontrol  ")
 
     def _sekme_ac(self, index: int):
         self.nb.select(index)
+
+    def _local_server_calisiyor_mu(self) -> bool:
+        try:
+            with urllib.request.urlopen("http://127.0.0.1:8000/index.html", timeout=1.2) as yanit:
+                return yanit.status == 200
+        except Exception:
+            return False
+
+    def _local_server_baslat(self) -> bool:
+        if self._local_server_calisiyor_mu():
+            return True
+
+        server_py = os.path.join(os.path.dirname(__file__), "local_server.py")
+        if not os.path.exists(server_py):
+            return False
+
+        try:
+            # Ayrı süreçte sessiz başlatılır; GUI kapanınca da çalışmaya devam eder.
+            startupinfo = None
+            creationflags = 0
+            if os.name == "nt":
+                startupinfo = subprocess.STARTUPINFO()
+                startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+                creationflags = getattr(subprocess, "CREATE_NO_WINDOW", 0)
+
+            subprocess.Popen(
+                [sys.executable, server_py, "--host", "127.0.0.1", "--port", "8000"],
+                cwd=os.path.dirname(__file__),
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                startupinfo=startupinfo,
+                creationflags=creationflags,
+            )
+        except Exception:
+            return False
+
+        # Server'ın ayağa kalkması için kısa bekleme/retry.
+        for _ in range(12):
+            if self._local_server_calisiyor_mu():
+                return True
+            time.sleep(0.12)
+            self.update_idletasks()
+        return False
+
+    def _anasayfa_penceresi_ac(self):
+        """Anasayfayı localhost üzerinden tarayıcıda aç."""
+        try:
+            if not self._local_server_baslat():
+                messagebox.showerror(
+                    "Hata",
+                    "Local server başlatılamadı. local_server.py dosyasını ve port 8000 durumunu kontrol edin.",
+                )
+                return
+            webbrowser.open("http://127.0.0.1:8000/index.html")
+        except Exception as exc:
+            messagebox.showerror("Hata", f"Tarayıcıda açılamadı: {exc}")
+
+
 
 
 def main():

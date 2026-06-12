@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="tr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Duyurular | Kıbrıs Türk Bisiklet Federasyonu</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <header class="hero page-hero">
+      <nav class="container nav">
+        <a class="brand" href="index.html" aria-label="KTBF Ana Sayfa">
+          <img src="logo.svg" alt="KTBF logosu" />
+        </a>
+        <ul>
+          <li><a href="index.html">Ana Sayfa</a></li>
+          <li><a href="hakkimizda.html">Hakkımızda</a></li>
+          <li><a href="duyurular.html" aria-current="page">Duyurular</a></li>
+          <li><a href="index.html#faaliyetler">Faaliyetler</a></li>
+          <li><a href="index.html#galeri">Galeri</a></li>
+          <li><a href="index.html#iletisim">İletişim</a></li>
+        </ul>
+      </nav>
+      <section class="container hero-content page-hero-content">
+        <p class="tag">KTBF WhatsApp Kanalı</p>
+        <h1>Duyurular</h1>
+        <p>
+          WhatsApp kanalında paylaşılan güncel duyurular bu sayfada yayınlanır.
+        </p>
+        <a
+          class="btn"
+          href="https://whatsapp.com/channel/0029Vb810XY6rsQkoDgejP18"
+          target="_blank"
+          rel="noopener noreferrer"
+          >WhatsApp Kanalına Git</a
+        >
+      </section>
+    </header>
+
+    <main>
+      <section class="container section">
+        <div class="announcements-head">
+          <h2>Son Duyurular</h2>
+          <p id="announcements-status" class="gallery-status" aria-live="polite">Duyurular yükleniyor...</p>
+        </div>
+        <div id="announcements-list" class="announcements-grid"></div>
+      </section>
+    </main>
+
+    <footer>
+      <div class="container">
+        <p>© 2026 Kıbrıs Türk Bisiklet Federasyonu</p>
+      </div>
+    </footer>
+
+    <script src="duyurular.js"></script>
+  </body>
+</html>

@@ -1,3 +1,39 @@
+// ── Forum Formları – otomatik listele ──────────────────────────────────────
+(function () {
+  const list = document.getElementById("forms-list");
+  if (!list) return;
+
+  fetch("Forms/manifest.json")
+    .then(function (r) {
+      if (!r.ok) throw new Error("manifest okunamadı");
+      return r.json();
+    })
+    .then(function (forms) {
+      if (!Array.isArray(forms) || forms.length === 0) {
+        list.innerHTML = "<li>Henüz form eklenmemiş.</li>";
+        return;
+      }
+      list.innerHTML = forms
+        .map(function (form) {
+          var safeName = String(form.name || form.file).replace(/</g, "&lt;");
+          var safeFile = String(form.file).replace(/[^a-zA-Z0-9_.\-\u00C0-\u024F]/g, function (c) {
+            return encodeURIComponent(c);
+          });
+          return (
+            '<li><a href="Forms/' +
+            safeFile +
+            '" download>' +
+            safeName +
+            "</a></li>"
+          );
+        })
+        .join("");
+    })
+    .catch(function () {
+      list.innerHTML = "<li>Formlar yüklenemedi.</li>";
+    });
+})();
+
 // ── Yasal Belgeler – otomatik listele ──────────────────────────────────────
 (function () {
   const list = document.getElementById("legal-docs-list");

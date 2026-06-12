@@ -1,0 +1,34 @@
+[
+  {
+    "name": "Kulüp Aktif Üyelik Başvuru Formu",
+    "file": "kulüp_aktif_uyelik_başvuru.xlsx"
+  },
+  {
+    "name": "Lisans Başvuru Formu",
+    "file": "lisans_basvuru.docx"
+  },
+  {
+    "name": "Vize Başvurusu",
+    "file": "vize.docx"
+  },
+  {
+    "name": "Sağlık Raporu",
+    "file": "saglik_raporu.docx"
+  },
+  {
+    "name": "Veli İzni",
+    "file": "veli_izni.docx"
+  },
+    {
+    "name": "Kulüp Muvafakatname",
+    "file": "kulup_muvafakatname.docx"
+  },
+  {
+    "name": "Yabancı Uyruklu Misafir Sporcular",
+    "file": "yabanci_uyruku_misafir.docx"
+  },
+  {
+    "name": "Foreign National Guest Athlete Application Form",
+    "file": "foreign_national_guest_athlete.docx"
+  }
+]
