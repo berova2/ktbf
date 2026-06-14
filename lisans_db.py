@@ -575,6 +575,58 @@ def yabanci_lisans_ekle(sporcu_id: int, yabanci_federasyon: str,
         return cur.lastrowid
 
 
+def yabanci_lisans_getir(yabanci_lisans_id: int) -> Optional[sqlite3.Row]:
+    """Tek bir yabancı federasyon lisansını id ile getirir."""
+    with get_conn() as conn:
+        return conn.execute(
+            "SELECT * FROM yabanci_lisanslar WHERE id=?",
+            (yabanci_lisans_id,)
+        ).fetchone()
+
+
+def yabanci_lisanslari_listele(sporcu_id: int) -> list:
+    """Bir sporcuya ait tüm yabancı federasyon lisanslarını getirir."""
+    with get_conn() as conn:
+        return conn.execute(
+            """SELECT yl.*, s.ad, s.soyad
+               FROM yabanci_lisanslar yl
+               JOIN sporcular s ON s.id = yl.sporcu_id
+               WHERE yl.sporcu_id=?
+               ORDER BY yl.beyan_tarihi DESC""",
+            (sporcu_id,)
+        ).fetchall()
+
+
+def yabanci_lisans_guncelle(yabanci_lisans_id: int, *,
+                            yabanci_federasyon: str = None,
+                            kulup: str = None,
+                            lisans_no: str = None,
+                            gecerlilik_tarihi: str = None,
+                            kulup_muvafakati: int = None) -> None:
+    """Yabancı federasyon lisans kaydını günceller."""
+    izin = {"yabanci_federasyon", "kulup", "lisans_no",
+            "gecerlilik_tarihi", "kulup_muvafakati"}
+    sutunlar = {k: v for k, v in locals().items()
+                if k in izin and v is not None}
+    if not sutunlar:
+        return
+    set_ifade = ", ".join(f"{k}=?" for k in sutunlar)
+    with get_conn() as conn:
+        conn.execute(
+            f"UPDATE yabanci_lisanslar SET {set_ifade} WHERE id=?",
+            (*sutunlar.values(), yabanci_lisans_id)
+        )
+
+
+def yabanci_lisans_sil(yabanci_lisans_id: int) -> None:
+    """Yabancı federasyon lisans kaydını siler."""
+    with get_conn() as conn:
+        conn.execute(
+            "DELETE FROM yabanci_lisanslar WHERE id=?",
+            (yabanci_lisans_id,)
+        )
+
+
 # ---------------------------------------------------------------------------
 # Transfer işlemleri
 # ---------------------------------------------------------------------------
@@ -812,6 +864,7 @@ def aktif_lisansli_sporcular() -> list:
             """SELECT s.id AS sporcu_id,
                       s.ad || ' ' || s.soyad AS ad_soyad,
                       s.dogum_tarihi,
+                      s.cinsiyet,
                       l.id AS lisans_id,
                       l.lisans_no,
                       COALESCE(k.ad, 'Ferdi') AS kulup_adi
@@ -957,7 +1010,9 @@ def yaris_kayitlari_listele(yaris_id: int = None) -> list:
                       l.lisans_no,
                       COALESCE(yk.kategori, '—') AS kategori,
                       yk.durum,
-                      yk.kayit_tarihi
+                      yk.kayit_tarihi,
+                      s.cinsiyet,
+                      s.dogum_tarihi
                FROM yaris_kayitlari yk
                JOIN yarislar y ON y.id = yk.yaris_id
                JOIN sporcular s ON s.id = yk.sporcu_id
