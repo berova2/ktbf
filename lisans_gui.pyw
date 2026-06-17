@@ -457,9 +457,10 @@ class KulupSekme(ttk.Frame):
 
 class SporcuSekme(ttk.Frame):
     _ALT_KATEGORI = {
-        "Master 1": "Elite",
-        "Master 2": "Master 1",
-        "Master 3": "Master 2",
+        "Master A": "Elite",
+        "Master B": "Elite",
+        "Master C": "Elite",
+        "Master 50+": "Elite",
     }
 
     def __init__(self, parent):
@@ -642,12 +643,14 @@ class SporcuSekme(ttk.Frame):
             return "Junior"
         if 19 <= yas <= 34:
             return "Elite"
-        if 35 <= yas <= 44:
-            return "Master 1"
-        if 45 <= yas <= 54:
-            return "Master 2"
-        if yas >= 55:
-            return "Master 3"
+        if 35 <= yas <= 39:
+            return "Master A"
+        if 40 <= yas <= 44:
+            return "Master B"
+        if 45 <= yas <= 49:
+            return "Master C"
+        if yas >= 50:
+            return "Master 50+"
         return "Kategori Dışı"
 
     def _kategori_gorunumu_guncelle(self):
@@ -727,12 +730,14 @@ class SporcuSekme(ttk.Frame):
                        THEN 'Junior / U19'
                    WHEN (CAST(strftime('%Y','now') AS INTEGER) - CAST(substr(s.dogum_tarihi,1,4) AS INTEGER)) BETWEEN 19 AND 34
                        THEN 'Elite'
-                   WHEN (CAST(strftime('%Y','now') AS INTEGER) - CAST(substr(s.dogum_tarihi,1,4) AS INTEGER)) BETWEEN 35 AND 44
-                       THEN 'Master 1'
-                   WHEN (CAST(strftime('%Y','now') AS INTEGER) - CAST(substr(s.dogum_tarihi,1,4) AS INTEGER)) BETWEEN 45 AND 54
-                       THEN 'Master 2'
-                   WHEN (CAST(strftime('%Y','now') AS INTEGER) - CAST(substr(s.dogum_tarihi,1,4) AS INTEGER)) >= 55
-                       THEN 'Master 3'
+                   WHEN (CAST(strftime('%Y','now') AS INTEGER) - CAST(substr(s.dogum_tarihi,1,4) AS INTEGER)) BETWEEN 35 AND 39
+                       THEN 'Master A'
+                   WHEN (CAST(strftime('%Y','now') AS INTEGER) - CAST(substr(s.dogum_tarihi,1,4) AS INTEGER)) BETWEEN 40 AND 44
+                       THEN 'Master B'
+                   WHEN (CAST(strftime('%Y','now') AS INTEGER) - CAST(substr(s.dogum_tarihi,1,4) AS INTEGER)) BETWEEN 45 AND 49
+                       THEN 'Master C'
+                   WHEN (CAST(strftime('%Y','now') AS INTEGER) - CAST(substr(s.dogum_tarihi,1,4) AS INTEGER)) >= 50
+                       THEN 'Master 50+'
                    ELSE 'Kategori Dışı'
                END AS yas_kategorisi,
                COALESCE(
@@ -749,12 +754,14 @@ class SporcuSekme(ttk.Frame):
                            THEN 'Junior'
                        WHEN (CAST(strftime('%Y','now') AS INTEGER) - CAST(substr(s.dogum_tarihi,1,4) AS INTEGER)) BETWEEN 19 AND 34
                            THEN 'Elite'
-                       WHEN (CAST(strftime('%Y','now') AS INTEGER) - CAST(substr(s.dogum_tarihi,1,4) AS INTEGER)) BETWEEN 35 AND 44
-                           THEN 'Master 1'
-                       WHEN (CAST(strftime('%Y','now') AS INTEGER) - CAST(substr(s.dogum_tarihi,1,4) AS INTEGER)) BETWEEN 45 AND 54
-                           THEN 'Master 2'
-                       WHEN (CAST(strftime('%Y','now') AS INTEGER) - CAST(substr(s.dogum_tarihi,1,4) AS INTEGER)) >= 55
-                           THEN 'Master 3'
+                       WHEN (CAST(strftime('%Y','now') AS INTEGER) - CAST(substr(s.dogum_tarihi,1,4) AS INTEGER)) BETWEEN 35 AND 39
+                           THEN 'Master A'
+                       WHEN (CAST(strftime('%Y','now') AS INTEGER) - CAST(substr(s.dogum_tarihi,1,4) AS INTEGER)) BETWEEN 40 AND 44
+                           THEN 'Master B'
+                       WHEN (CAST(strftime('%Y','now') AS INTEGER) - CAST(substr(s.dogum_tarihi,1,4) AS INTEGER)) BETWEEN 45 AND 49
+                           THEN 'Master C'
+                       WHEN (CAST(strftime('%Y','now') AS INTEGER) - CAST(substr(s.dogum_tarihi,1,4) AS INTEGER)) >= 50
+                           THEN 'Master 50+'
                        ELSE 'Kategori Dışı'
                    END
                ) AS yaris_kategorisi,
@@ -1166,9 +1173,10 @@ def _yas_kategorisi_hesapla(dogum_tarihi: str) -> str:
         if 15 <= yas <= 16:  return "U17"
         if 17 <= yas <= 18:  return "Junior"
         if 19 <= yas <= 34:  return "Elite"
-        if 35 <= yas <= 44:  return "Master 1"
-        if 45 <= yas <= 54:  return "Master 2"
-        if yas >= 55:        return "Master 3"
+        if 35 <= yas <= 39:  return "Master A"
+        if 40 <= yas <= 44:  return "Master B"
+        if 45 <= yas <= 49:  return "Master C"
+        if yas >= 50:        return "Master 50+"
         return "KD"
     except Exception:
         return "—"
@@ -1265,7 +1273,7 @@ class YarisKayitSekme(ttk.Frame):
 
         self.v_kategori = _lbl_combo(
             alt, "Kategori",
-            ["Elite", "Junior", "U17", "U15", "Master 1", "Master 2", "Master 3", "Diğer"],
+            ["Elite", "Junior", "U17", "U15", "Master A", "Master B", "Master C", "Master 50+", "Diğer"],
             2, width=16)
         self.v_kategori.set("Elite")
 
@@ -1505,7 +1513,7 @@ class YarisKayitSekme(ttk.Frame):
         v_kat = tk.StringVar(value=secili["kategori"] if secili["kategori"] not in ("—", "") else "")
         cb_kat = ttk.Combobox(frm, textvariable=v_kat,
                               values=["Elite", "Junior", "U17", "U15",
-                                      "Master 1", "Master 2", "Master 3", "Diğer"],
+                                      "Master A", "Master B", "Master C", "Master 50+", "Diğer"],
                               width=16, state="readonly")
         cb_kat.grid(row=3, column=1, sticky="w", pady=4)
 
@@ -1724,13 +1732,14 @@ class YarisKayitSekme(ttk.Frame):
         # ── Kategori sırası ve bir-alt haritası ──────────────────────────
         KATEGORI_SIRA = [
             "U13", "U15", "U17", "Junior",
-            "Elite", "Master 1", "Master 2", "Master 3",
+            "Elite", "Master A", "Master B", "Master C", "Master 50+",
         ]
         ALT_KATEGORI = {
-            # Sadece 35 yaş ve üstü (Master) sporcular alt kategori seçebilir
-            "Master 1": "Elite",
-            "Master 2": "Master 1",
-            "Master 3": "Master 2",
+            # Master sporcular sezon başı tercih ederse Elite kategorisinde yarışabilir
+            "Master A": "Elite",
+            "Master B": "Elite",
+            "Master C": "Elite",
+            "Master 50+": "Elite",
         }
 
         def hesapla_yas_kat(dogum_tarihi):
@@ -1743,9 +1752,10 @@ class YarisKayitSekme(ttk.Frame):
                 if 15 <= yas <= 16:  return "U17"
                 if 17 <= yas <= 18:  return "Junior"
                 if 19 <= yas <= 34:  return "Elite"
-                if 35 <= yas <= 44:  return "Master 1"
-                if 45 <= yas <= 54:  return "Master 2"
-                if yas >= 55:        return "Master 3"
+                if 35 <= yas <= 39:  return "Master A"
+                if 40 <= yas <= 44:  return "Master B"
+                if 45 <= yas <= 49:  return "Master C"
+                if yas >= 50:        return "Master 50+"
                 return "Kategori Dışı"
             except Exception:
                 return "—"
