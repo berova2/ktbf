@@ -456,12 +456,8 @@ class KulupSekme(ttk.Frame):
 # ---------------------------------------------------------------------------
 
 class SporcuSekme(ttk.Frame):
-    _ALT_KATEGORI = {
-        "Master A": "Elite",
-        "Master B": "Elite",
-        "Master C": "Elite",
-        "Master 50+": "Elite",
-    }
+    _TUM_KATEGORILER = ["U13", "U15", "U17", "U19", "Elite",
+                        "Master A", "Master B", "Master C"]
 
     def __init__(self, parent):
         super().__init__(parent, style="TFrame")
@@ -494,8 +490,6 @@ class SporcuSekme(ttk.Frame):
                    command=self._sil).pack(side="left", padx=4)
         ttk.Button(ust_buton_seridi, text="🔄 Kulüpleri Yenile", style="Neu.TButton",
                    command=self._yukle_kulupler).pack(side="left", padx=4)
-        ttk.Button(ust_buton_seridi, text="🔄 Kategori Değiştir", style="Neu.TButton",
-               command=self._kategori_degistir).pack(side="left", padx=4)
         ttk.Button(ust_buton_seridi, text="🌐 Başka Fed. Lisansı", style="Neu.TButton",
                command=self._baska_fed_lisansi_ac).pack(side="left", padx=4)
         ttk.Button(ust_buton_seridi, text="✖ Temizle", style="Neu.TButton",
@@ -577,15 +571,17 @@ class SporcuSekme(ttk.Frame):
         ttk.Label(form_frame, text="Yarış Kategorisi").grid(
             row=16, column=0, sticky="e", padx=(8, 4), pady=4)
         self.v_yaris_kategorisi = tk.StringVar(value="—")
-        self.lbl_yaris_kategorisi = tk.Label(
+        self.cb_yaris_kategorisi = ttk.Combobox(
             form_frame,
             textvariable=self.v_yaris_kategorisi,
-            bg=BG,
-            fg="black",
-            font=FONT_B,
+            values=self._TUM_KATEGORILER,
+            width=14,
+            state="readonly",
         )
-        self.lbl_yaris_kategorisi.grid(
+        self.cb_yaris_kategorisi.grid(
             row=16, column=1, sticky="w", padx=(0, 8), pady=4)
+        self.cb_yaris_kategorisi.bind("<<ComboboxSelected>>",
+                                       self._yaris_kategorisi_degisti)
 
         form_frame.columnconfigure(1, weight=1)
 
@@ -640,22 +636,36 @@ class SporcuSekme(ttk.Frame):
         if 15 <= yas <= 16:
             return "U17"
         if 17 <= yas <= 18:
-            return "Junior"
+            return "U19"
         if 19 <= yas <= 34:
             return "Elite"
         if 35 <= yas <= 39:
             return "Master A"
         if 40 <= yas <= 44:
             return "Master B"
-        if 45 <= yas <= 49:
+        if yas >= 45:
             return "Master C"
-        if yas >= 50:
-            return "Master 50+"
         return "Kategori Dışı"
 
     def _kategori_gorunumu_guncelle(self):
         yas_kat = self._hesapla_yas_kategorisi(self.v_dogum.get().strip())
         self.v_yas_kategorisi.set(yas_kat)
+
+        # Combobox seçeneklerini yaş kategorisine göre belirle
+        # Masterlar: kendi kategorisi + bir alt master + Elite
+        # Master C → [C, B, A, Elite];  Master B → [B, A, Elite];  Master A → [A, Elite]
+        _MASTER_SECENEK = {
+            "Master A": ["Master A", "Elite"],
+            "Master B": ["Master B", "Master A", "Elite"],
+            "Master C": ["Master C", "Master B", "Master A", "Elite"],
+        }
+        if yas_kat in _MASTER_SECENEK:
+            secenekler = _MASTER_SECENEK[yas_kat]
+        elif yas_kat in ("—", "Kategori Dışı", "KD"):
+            secenekler = self._TUM_KATEGORILER
+        else:
+            secenekler = [yas_kat]
+        self.cb_yaris_kategorisi["values"] = secenekler
 
         sezon = self.v_sezon.get().strip() or "2026"
         yaris_kat = yas_kat
@@ -665,45 +675,32 @@ class SporcuSekme(ttk.Frame):
                 yaris_kat = secim
 
         self.v_yaris_kategorisi.set(yaris_kat)
-        self.lbl_yaris_kategorisi.config(
-            fg=ACCENT if yaris_kat != yas_kat else "black"
+        # Combobox yazı rengi: override varsa mavi, yoksa normal
+        self.cb_yaris_kategorisi.configure(
+            foreground=ACCENT if yaris_kat != yas_kat else "black"
         )
 
-    def _kategori_degistir(self):
+    def _yaris_kategorisi_degisti(self, _=None):
+        """Combobox'tan seçilen yarış kategorisini doğrudan kaydeder."""
         if not self._secili_id:
-            messagebox.showwarning("Uyarı", "Önce listeden bir sporcu seçin.")
             return
-        sezon = self.v_sezon.get().strip()
-        if not sezon:
-            messagebox.showwarning("Uyarı", "Önce sezon bilgisini girin.")
+        secilen = self.v_yaris_kategorisi.get().strip()
+        if not secilen or secilen == "—":
             return
         yas_kat = self._hesapla_yas_kategorisi(self.v_dogum.get().strip())
-        alt_kat = self._ALT_KATEGORI.get(yas_kat)
-        if not alt_kat:
-            messagebox.showwarning(
-                "Uyarı",
-                "Bu sporcu için bir alt kategori uygulanamıyor.",
+        sezon = self.v_sezon.get().strip() or "2026"
+
+        if secilen == yas_kat:
+            # Yaş kategorisiyle aynı seçilmiş → override'ı temizle
+            db.sporcu_sezon_kategori_sil(self._secili_id, sezon)
+        else:
+            db.sporcu_sezon_kategori_ata(
+                self._secili_id,
+                sezon,
+                yas_kategorisi=yas_kat,
+                yaris_kategorisi=secilen,
             )
-            return
-
-        onay = messagebox.askyesno(
-            "Kategori Değiştir",
-            f"Sporcunun yaş kategorisi: {yas_kat}\n"
-            f"Bir alt kategori: {alt_kat}\n\n"
-            "Bu değişiklik seçilen sezonun kalan tüm yarışlarında geçerli olur.\n"
-            "Devam edilsin mi?",
-        )
-        if not onay:
-            return
-
-        db.sporcu_sezon_kategori_ata(
-            self._secili_id,
-            sezon,
-            yas_kategorisi=yas_kat,
-            yaris_kategorisi=alt_kat,
-        )
         self._kategori_gorunumu_guncelle()
-        messagebox.showinfo("Başarılı", "Sezonluk yarış kategorisi güncellendi.")
 
     def _evrak_kontrolu_gecerli(self) -> bool:
         yas = self._hesapla_yas(self.v_dogum.get().strip())
@@ -721,23 +718,21 @@ class SporcuSekme(ttk.Frame):
                CASE
                    WHEN s.dogum_tarihi IS NULL OR TRIM(s.dogum_tarihi) = '' THEN '—'
                    WHEN (CAST(strftime('%Y','now') AS INTEGER) - CAST(substr(s.dogum_tarihi,1,4) AS INTEGER)) BETWEEN 11 AND 12
-                       THEN 'Yıldız C / U13'
+                       THEN 'U13'
                    WHEN (CAST(strftime('%Y','now') AS INTEGER) - CAST(substr(s.dogum_tarihi,1,4) AS INTEGER)) BETWEEN 13 AND 14
                        THEN 'Yıldız B / U15'
                    WHEN (CAST(strftime('%Y','now') AS INTEGER) - CAST(substr(s.dogum_tarihi,1,4) AS INTEGER)) BETWEEN 15 AND 16
                        THEN 'Yıldız A / U17'
                    WHEN (CAST(strftime('%Y','now') AS INTEGER) - CAST(substr(s.dogum_tarihi,1,4) AS INTEGER)) BETWEEN 17 AND 18
-                       THEN 'Junior / U19'
+                       THEN 'Genç / U19'
                    WHEN (CAST(strftime('%Y','now') AS INTEGER) - CAST(substr(s.dogum_tarihi,1,4) AS INTEGER)) BETWEEN 19 AND 34
                        THEN 'Elite'
                    WHEN (CAST(strftime('%Y','now') AS INTEGER) - CAST(substr(s.dogum_tarihi,1,4) AS INTEGER)) BETWEEN 35 AND 39
                        THEN 'Master A'
                    WHEN (CAST(strftime('%Y','now') AS INTEGER) - CAST(substr(s.dogum_tarihi,1,4) AS INTEGER)) BETWEEN 40 AND 44
                        THEN 'Master B'
-                   WHEN (CAST(strftime('%Y','now') AS INTEGER) - CAST(substr(s.dogum_tarihi,1,4) AS INTEGER)) BETWEEN 45 AND 49
+                   WHEN (CAST(strftime('%Y','now') AS INTEGER) - CAST(substr(s.dogum_tarihi,1,4) AS INTEGER)) >= 45
                        THEN 'Master C'
-                   WHEN (CAST(strftime('%Y','now') AS INTEGER) - CAST(substr(s.dogum_tarihi,1,4) AS INTEGER)) >= 50
-                       THEN 'Master 50+'
                    ELSE 'Kategori Dışı'
                END AS yas_kategorisi,
                COALESCE(
@@ -751,17 +746,15 @@ class SporcuSekme(ttk.Frame):
                        WHEN (CAST(strftime('%Y','now') AS INTEGER) - CAST(substr(s.dogum_tarihi,1,4) AS INTEGER)) BETWEEN 15 AND 16
                            THEN 'U17'
                        WHEN (CAST(strftime('%Y','now') AS INTEGER) - CAST(substr(s.dogum_tarihi,1,4) AS INTEGER)) BETWEEN 17 AND 18
-                           THEN 'Junior'
+                           THEN 'U19'
                        WHEN (CAST(strftime('%Y','now') AS INTEGER) - CAST(substr(s.dogum_tarihi,1,4) AS INTEGER)) BETWEEN 19 AND 34
                            THEN 'Elite'
                        WHEN (CAST(strftime('%Y','now') AS INTEGER) - CAST(substr(s.dogum_tarihi,1,4) AS INTEGER)) BETWEEN 35 AND 39
                            THEN 'Master A'
                        WHEN (CAST(strftime('%Y','now') AS INTEGER) - CAST(substr(s.dogum_tarihi,1,4) AS INTEGER)) BETWEEN 40 AND 44
                            THEN 'Master B'
-                       WHEN (CAST(strftime('%Y','now') AS INTEGER) - CAST(substr(s.dogum_tarihi,1,4) AS INTEGER)) BETWEEN 45 AND 49
+                       WHEN (CAST(strftime('%Y','now') AS INTEGER) - CAST(substr(s.dogum_tarihi,1,4) AS INTEGER)) >= 45
                            THEN 'Master C'
-                       WHEN (CAST(strftime('%Y','now') AS INTEGER) - CAST(substr(s.dogum_tarihi,1,4) AS INTEGER)) >= 50
-                           THEN 'Master 50+'
                        ELSE 'Kategori Dışı'
                    END
                ) AS yaris_kategorisi,
@@ -965,7 +958,7 @@ class SporcuSekme(ttk.Frame):
         self.v_evrak_baska_fed.set(0)
         self.v_yas_kategorisi.set("—")
         self.v_yaris_kategorisi.set("—")
-        self.lbl_yaris_kategorisi.config(fg="black")
+        self.cb_yaris_kategorisi.configure(foreground="black")
         self._secili_id = None
         self.tree.selection_remove(*self.tree.selection())
 
@@ -1171,12 +1164,11 @@ def _yas_kategorisi_hesapla(dogum_tarihi: str) -> str:
         if 11 <= yas <= 12:  return "U13"
         if 13 <= yas <= 14:  return "U15"
         if 15 <= yas <= 16:  return "U17"
-        if 17 <= yas <= 18:  return "Junior"
+        if 17 <= yas <= 18:  return "U19"
         if 19 <= yas <= 34:  return "Elite"
         if 35 <= yas <= 39:  return "Master A"
         if 40 <= yas <= 44:  return "Master B"
-        if 45 <= yas <= 49:  return "Master C"
-        if yas >= 50:        return "Master 50+"
+        if yas >= 45:        return "Master C"
         return "KD"
     except Exception:
         return "—"
@@ -1264,30 +1256,36 @@ class YarisKayitSekme(ttk.Frame):
         self.cb_kayit_yaris.grid(row=0, column=1, sticky="ew", padx=(0, 8), pady=4)
         self.cb_kayit_yaris.bind("<<ComboboxSelected>>", self._on_kayit_yaris_sec)
 
-        ttk.Label(alt, text="Sporcu").grid(row=1, column=0, sticky="e",
-                                             padx=(8, 4), pady=4)
+        ttk.Label(alt, text="Sporcu Ara").grid(row=1, column=0, sticky="e",
+                                                padx=(8, 4), pady=4)
+        self.v_sporcu_ara = tk.StringVar()
+        ttk.Entry(alt, textvariable=self.v_sporcu_ara, width=22
+                  ).grid(row=1, column=1, sticky="ew", padx=(0, 4), pady=4)
+        ttk.Label(alt, text="→").grid(row=1, column=2, sticky="w", padx=(0, 2), pady=4)
         self.v_kayit_sporcu = tk.StringVar()
         self.cb_kayit_sporcu = ttk.Combobox(
-            alt, textvariable=self.v_kayit_sporcu, width=32, state="readonly")
-        self.cb_kayit_sporcu.grid(row=1, column=1, sticky="ew", padx=(0, 8), pady=4)
+            alt, textvariable=self.v_kayit_sporcu, width=34, state="readonly")
+        self.cb_kayit_sporcu.grid(row=1, column=3, sticky="ew", padx=(0, 8), pady=4)
 
-        self.v_kategori = _lbl_combo(
-            alt, "Kategori",
-            ["Elite", "Junior", "U17", "U15", "Master A", "Master B", "Master C", "Master 50+", "Diğer"],
-            2, width=16)
-        self.v_kategori.set("Elite")
+        ttk.Label(alt, text="Kategori").grid(row=2, column=0, sticky="e",
+                                               padx=(8, 4), pady=4)
+        self.v_kat_otomatik = tk.StringVar(value="—")
+        self.lbl_kat = ttk.Label(alt, textvariable=self.v_kat_otomatik, font=FONT_B)
+        self.lbl_kat.grid(row=2, column=1, sticky="w", padx=(0, 8), pady=4)
 
-        alt.columnconfigure(1, weight=1)
+        # Arama yazıldıkça filtrele, sporcu seçilince kategoriyi göster
+        self.v_sporcu_ara.trace_add("write", self._sporcu_ara_filtrele)
+        self.cb_kayit_sporcu.bind("<<ComboboxSelected>>", self._kategori_goruntule)
+
+        alt.columnconfigure(3, weight=1)
 
         b2 = ttk.Frame(alt)
-        b2.grid(row=3, column=0, columnspan=2, pady=(8, 4))
+        b2.grid(row=3, column=0, columnspan=4, pady=(8, 4))
         ttk.Button(b2, text="➕ Kaydı Oluştur", style="Add.TButton",
                    command=self._kayit_ekle).pack(side="left", padx=4)
         ttk.Button(b2, text="✖ Seçili Kaydı Sil", style="Del.TButton",
                    command=self._kayit_sil).pack(side="left", padx=4)
-        ttk.Button(b2, text="🗂 Kayıt Penceresi", style="Neu.TButton",
-               command=self._kayit_penceresi_ac).pack(side="left", padx=4)
-        ttk.Button(b2, text="🔄 Sporcuları Yenile", style="Neu.TButton",
+        ttk.Button(b2, text=" Sporcuları Yenile", style="Neu.TButton",
                    command=self._sporculari_yukle).pack(side="left", padx=4)
 
         cols_kayit = [
@@ -1309,15 +1307,6 @@ class YarisKayitSekme(ttk.Frame):
         self._kayit_menu = tk.Menu(self.tree_kayit, tearoff=0)
         self._kayit_menu.add_command(label="✏️ Seçili Kaydı Güncelle",
                                      command=self._kayit_guncelle_dialog)
-        self._kayit_menu.add_separator()
-        self._kayit_menu.add_command(label="📁 Kategoriye Göre Grupla",
-                                     command=lambda: self._kayitlari_listele(grupla="kategori"))
-        self._kayit_menu.add_command(label="📁 Cinsiyete Göre Grupla",
-                                     command=lambda: self._kayitlari_listele(grupla="cinsiyet"))
-        self._kayit_menu.add_command(label="� Kategori+Cinsiyet Sınıfla",
-                                     command=lambda: self._kayitlari_listele(grupla="kategori_cinsiyet"))
-        self._kayit_menu.add_command(label="�🔓 Grubu Kaldır",
-                                     command=lambda: self._kayitlari_listele(grupla=None))
         self._kayit_menu.add_separator()
         self._kayit_menu.add_command(label="📊 Excel'e Aktar (CSV)",
                                      command=self._kayitlari_csv_export)
@@ -1352,14 +1341,36 @@ class YarisKayitSekme(ttk.Frame):
             yas_kat = _yas_kategorisi_hesapla(r["dogum_tarihi"])
             ch = _cinsiyet_harf(r["cinsiyet"])
             label = f"{r['ad_soyad']} | {yas_kat}({ch}) | {r['lisans_no']} | {r['kulup_adi']}"
-            self._sporcu_map[label] = (r["sporcu_id"], r["lisans_id"])
-        self.cb_kayit_sporcu["values"] = list(self._sporcu_map.keys())
-        if self.v_kayit_sporcu.get() not in self._sporcu_map:
-            self.v_kayit_sporcu.set("")
-        if self._sporcu_map and not self.v_kayit_sporcu.get():
-            self.v_kayit_sporcu.set(list(self._sporcu_map.keys())[0])
+            self._sporcu_map[label] = (r["sporcu_id"], r["lisans_id"], r["dogum_tarihi"], r["cinsiyet"])
+        self._sporcu_ara_filtrele()
+        self._kategori_goruntule()
 
-    def _kayitlari_listele(self, grupla: str | None = None):
+    def _sporcu_ara_filtrele(self, *_):
+        q = self.v_sporcu_ara.get().strip().lower()
+        tumu = list(self._sporcu_map.keys())
+        if not q:
+            filtreli = tumu
+        else:
+            filtreli = [et for et in tumu if q in et.lower()]
+        self.cb_kayit_sporcu["values"] = filtreli
+        if filtreli:
+            self.v_kayit_sporcu.set(filtreli[0])
+        else:
+            self.v_kayit_sporcu.set("")
+        self._kategori_goruntule()
+
+    def _kategori_goruntule(self, _=None):
+        """Seçili sporcunun yaş kategorisini hesapla ve göster."""
+        label = self.v_kayit_sporcu.get().strip()
+        info = self._sporcu_map.get(label)
+        if not info or len(info) < 3:
+            self.v_kat_otomatik.set("—")
+            return
+        kat = _yas_kategorisi_hesapla(info[2])
+        ch = _cinsiyet_harf(info[3])
+        self.v_kat_otomatik.set(f"{kat} ({ch})" if kat not in ("—", "KD") else "—")
+
+    def _kayitlari_listele(self):
         sec = self.v_kayit_yaris.get().strip()
         yaris_id = self._yaris_map.get(sec) if sec else None
         rows = db.yaris_kayitlari_listele(yaris_id)
@@ -1367,88 +1378,16 @@ class YarisKayitSekme(ttk.Frame):
         tree = self.tree_kayit
         tree.delete(*tree.get_children())
 
-        # Satırları hazırla
-        satirlar = []
-        for r in rows:
+        for i, r in enumerate(rows):
+            tag = "even" if i % 2 == 0 else "odd"
             ch = _cinsiyet_harf(r["cinsiyet"])
-            kategori = r["kategori"] if r["kategori"] not in ("—", "") else "—"
-            satirlar.append({
-                "id": r["id"],
-                "yaris_adi": r["yaris_adi"],
-                "yaris_tarihi": r["yaris_tarihi"],
-                "sporcu": r["sporcu"],
-                "cinsiyet": ch,
-                "lisans_no": r["lisans_no"],
-                "kategori": f"{kategori} ({ch})" if kategori != "—" else "—",
-                "durum": r["durum"],
-                "kayit_tarihi": r["kayit_tarihi"],
-                "_cinsiyet_raw": r["cinsiyet"],
-                "_kategori_raw": r["kategori"],
-            })
-
-        # Gruplama
-        if grupla == "kategori":
-            from itertools import groupby
-            anahtar = lambda s: s["_kategori_raw"] if s["_kategori_raw"] not in ("—", "") else "Belirtilmemiş"
-            satirlar.sort(key=anahtar)
-            tree.delete(*tree.get_children())
-            for grup, elemanlar in groupby(satirlar, key=anahtar):
-                eleman_listesi = list(elemanlar)
-                gid = f"grup_{grup}"
-                tree.insert("", "end", iid=gid,
-                            values=("", f"📁 {grup} ({len(eleman_listesi)})") + ("",)*7,
-                            tags=("group",), open=True)
-                for s in eleman_listesi:
-                    tree.insert(gid, "end", iid=str(s["id"]),
-                                values=(s["id"], s["yaris_adi"], s["yaris_tarihi"],
-                                        s["sporcu"], s["cinsiyet"], s["lisans_no"],
-                                        s["kategori"], s["durum"], s["kayit_tarihi"]),
-                                tags=("even",))
-        elif grupla == "cinsiyet":
-            for cins_deger, cins_etiket in [("Kadın", "Kadın"), ("Erkek", "Erkek"), ("Belirtilmedi", "Belirtilmemiş")]:
-                grup_satirlar = [s for s in satirlar if s["_cinsiyet_raw"] == cins_deger]
-                if not grup_satirlar:
-                    continue
-                gid = f"grup_{cins_deger}"
-                tree.insert("", "end", iid=gid,
-                            values=("", f"📁 {cins_etiket} ({len(grup_satirlar)})") + ("",)*7,
-                            tags=("group",), open=True)
-                for s in grup_satirlar:
-                    tree.insert(gid, "end", iid=str(s["id"]),
-                                values=(s["id"], s["yaris_adi"], s["yaris_tarihi"],
-                                        s["sporcu"], s["cinsiyet"], s["lisans_no"],
-                                        s["kategori"], s["durum"], s["kayit_tarihi"]),
-                                tags=("even",))
-        elif grupla == "kategori_cinsiyet":
-            from itertools import groupby
-            def anahtar(s):
-                kat = s["_kategori_raw"] if s["_kategori_raw"] not in ("—", "") else "Belirtilmemiş"
-                ch = _cinsiyet_harf(s["_cinsiyet_raw"])
-                return (kat, ch)
-            satirlar.sort(key=anahtar)
-            tree.delete(*tree.get_children())
-            for grup, elemanlar in groupby(satirlar, key=anahtar):
-                kat, ch = grup
-                eleman_listesi = list(elemanlar)
-                gid = f"grup_{kat}_{ch}"
-                etiket = f"📁 {kat} — {ch} ({len(eleman_listesi)})"
-                tree.insert("", "end", iid=gid,
-                            values=("", etiket) + ("",)*7,
-                            tags=("group",), open=True)
-                for s in eleman_listesi:
-                    tree.insert(gid, "end", iid=str(s["id"]),
-                                values=(s["id"], s["yaris_adi"], s["yaris_tarihi"],
-                                        s["sporcu"], s["cinsiyet"], s["lisans_no"],
-                                        s["kategori"], s["durum"], s["kayit_tarihi"]),
-                                tags=("even",))
-        else:
-            for i, s in enumerate(satirlar):
-                tag = "even" if i % 2 == 0 else "odd"
-                tree.insert("", "end", iid=str(s["id"]),
-                            values=(s["id"], s["yaris_adi"], s["yaris_tarihi"],
-                                    s["sporcu"], s["cinsiyet"], s["lisans_no"],
-                                    s["kategori"], s["durum"], s["kayit_tarihi"]),
-                            tags=(tag,))
+            kat = r["kategori"]
+            kategori = f"{kat} ({ch})" if kat not in ("—", "") else "—"
+            tree.insert("", "end", iid=str(r["id"]),
+                        values=(r["id"], r["yaris_adi"], r["yaris_tarihi"],
+                                r["sporcu"], ch, r["lisans_no"],
+                                kategori, r["durum"], r["kayit_tarihi"]),
+                        tags=(tag,))
 
     def _kayit_menu_goster(self, event):
         try:
@@ -1460,15 +1399,6 @@ class YarisKayitSekme(ttk.Frame):
         sel = self.tree_kayit.selection()
         if not sel:
             return
-        # Grup satırıysa aç/kapa yap
-        iid = sel[0]
-        if iid.startswith("grup_"):
-            if self.tree_kayit.item(iid, "open"):
-                self.tree_kayit.item(iid, open=False)
-            else:
-                self.tree_kayit.item(iid, open=True)
-            return
-        # Detaylı düzenleme GUI'sini aç
         self._kayit_guncelle_dialog()
 
     def _kayit_guncelle_dialog(self):
@@ -1512,8 +1442,8 @@ class YarisKayitSekme(ttk.Frame):
         ttk.Label(frm, text="Kategori:").grid(row=3, column=0, sticky="e", padx=(0, 8), pady=4)
         v_kat = tk.StringVar(value=secili["kategori"] if secili["kategori"] not in ("—", "") else "")
         cb_kat = ttk.Combobox(frm, textvariable=v_kat,
-                              values=["Elite", "Junior", "U17", "U15",
-                                      "Master A", "Master B", "Master C", "Master 50+", "Diğer"],
+                              values=["U13", "U15", "U17", "U19", "Elite",
+                                      "Master A", "Master B", "Master C", "Diğer"],
                               width=16, state="readonly")
         cb_kat.grid(row=3, column=1, sticky="w", pady=4)
 
@@ -1680,22 +1610,20 @@ class YarisKayitSekme(ttk.Frame):
                 "Kayıt için sadece 'Kayıt Açık' yarış seçilebilir ve sporcu seçimi zorunludur.",
             )
             return
-        sporcu_id, lisans_id = sporcu_info
+        sporcu_id, lisans_id, dogum_tarihi, _ = sporcu_info
+        kategori = _yas_kategorisi_hesapla(dogum_tarihi)
+        if kategori in ("—", "KD"):
+            kategori = None
         try:
             db.yaris_kayit_ekle(
                 yaris_id=yaris_id,
                 sporcu_id=sporcu_id,
                 lisans_id=lisans_id,
-                kategori=self.v_kategori.get() or None,
+                kategori=kategori,
             )
             # Optimize: eklenen sporcuyu yerel haritadan kaldır, yeniden sorgulama
             self._sporcu_map.pop(sporcu, None)
-            cb_values = list(self._sporcu_map.keys())
-            self.cb_kayit_sporcu["values"] = cb_values
-            if cb_values:
-                self.v_kayit_sporcu.set(cb_values[0])
-            else:
-                self.v_kayit_sporcu.set("")
+            self._sporcu_ara_filtrele()
             self._kayitlari_listele()
             messagebox.showinfo("Başarılı", "Sporcu yarışa kaydedildi.")
         except Exception as exc:
@@ -1731,16 +1659,9 @@ class YarisKayitSekme(ttk.Frame):
 
         # ── Kategori sırası ve bir-alt haritası ──────────────────────────
         KATEGORI_SIRA = [
-            "U13", "U15", "U17", "Junior",
-            "Elite", "Master A", "Master B", "Master C", "Master 50+",
+            "U13", "U15", "U17", "U19",
+            "Elite", "Master A", "Master B", "Master C",
         ]
-        ALT_KATEGORI = {
-            # Master sporcular sezon başı tercih ederse Elite kategorisinde yarışabilir
-            "Master A": "Elite",
-            "Master B": "Elite",
-            "Master C": "Elite",
-            "Master 50+": "Elite",
-        }
 
         def hesapla_yas_kat(dogum_tarihi):
             if not dogum_tarihi:
@@ -1750,12 +1671,11 @@ class YarisKayitSekme(ttk.Frame):
                 if 11 <= yas <= 12:  return "U13"
                 if 13 <= yas <= 14:  return "U15"
                 if 15 <= yas <= 16:  return "U17"
-                if 17 <= yas <= 18:  return "Junior"
+                if 17 <= yas <= 18:  return "U19"
                 if 19 <= yas <= 34:  return "Elite"
                 if 35 <= yas <= 39:  return "Master A"
                 if 40 <= yas <= 44:  return "Master B"
-                if 45 <= yas <= 49:  return "Master C"
-                if yas >= 50:        return "Master 50+"
+                if yas >= 45:        return "Master C"
                 return "Kategori Dışı"
             except Exception:
                 return "—"
@@ -1854,7 +1774,7 @@ class YarisKayitSekme(ttk.Frame):
 
         v_sporcu_ara.trace_add("write", _sporcu_ara_filtrele)
 
-        # Satır 2: Yaş Kategorisi | Yarış Kategorisi | Kategori Değiştir
+        # Satır 2: Yaş Kategorisi | Yarış Kategorisi
         ttk.Label(top, text="Yaş Kategorisi:").grid(
             row=2, column=0, sticky="e", padx=(4, 4), pady=4)
         lbl_yas_kat = ttk.Label(top, text="—", font=FONT_B)
@@ -1862,14 +1782,8 @@ class YarisKayitSekme(ttk.Frame):
         ttk.Label(top, text="Yarış Kategorisi:").grid(
             row=2, column=2, sticky="e", padx=(4, 4), pady=4)
         v_yaris_kat = tk.StringVar(value="—")
-        lbl_yaris_kat = tk.Label(top, textvariable=v_yaris_kat,
-                                 font=FONT_B,
-                                 bg=BG, foreground="black")
+        lbl_yaris_kat = ttk.Label(top, textvariable=v_yaris_kat, font=FONT_B)
         lbl_yaris_kat.grid(row=2, column=3, sticky="w", padx=(0, 8), pady=4)
-        btn_kat_degistir = ttk.Button(top, text="🔄 Kategori Değiştir",
-                                      style="Neu.TButton", state="disabled")
-        btn_kat_degistir.grid(row=2, column=4, columnspan=2,
-                               sticky="w", padx=(0, 8), pady=4)
 
         # Satır 3: İşlem butonları
         btn_frame = ttk.Frame(top)
@@ -1903,15 +1817,10 @@ class YarisKayitSekme(ttk.Frame):
             ov  = _st["override_kat"]
             if ov and ov != yas:
                 v_yaris_kat.set(ov)
-                lbl_yaris_kat.config(foreground=ACCENT)   # mavi
-                btn_kat_degistir.config(state="disabled")  # kilitli
+                lbl_yaris_kat.configure(foreground=ACCENT)
             else:
                 v_yaris_kat.set(yas)
-                lbl_yaris_kat.config(foreground="black")
-                alt = ALT_KATEGORI.get(yas)
-                btn_kat_degistir.config(
-                    state="normal" if (alt and yas not in ("—", "Kategori Dışı"))
-                    else "disabled")
+                lbl_yaris_kat.configure(foreground="black")
 
         def on_sporcu_sec(_=None):
             info = sporcu_map.get(v_sporcu.get().strip())
@@ -1934,39 +1843,7 @@ class YarisKayitSekme(ttk.Frame):
 
         cb_sporcu.bind("<<ComboboxSelected>>", on_sporcu_sec)
 
-        def on_kat_degistir():
-            yas = _st["yas_kat"]
-            alt = ALT_KATEGORI.get(yas)
-            if not alt:
-                return
-            info = sporcu_map.get(v_sporcu.get().strip())
-            if not info:
-                messagebox.showwarning("Uyarı", "Önce bir sporcu seçin.", parent=win)
-                return
-            sporcu_id, _lisans_id, _dogum_tarihi, _ = info
-            sezon = get_secili_sezon()
-            if not sezon:
-                messagebox.showwarning("Uyarı", "Sezon bilgisi bulunamadı.", parent=win)
-                return
-            if not messagebox.askyesno(
-                "Kategori Değiştir",
-                f"Sporcunun yaş kategorisi: {yas}\n"
-                f"Bir alt kategoride ({alt}) yarışmak isteniyor.\n\n"
-                f"UYARI: Bu sezondaki TÜM yarışlarda '{alt}' kategorisinde\n"
-                "yarışmak zorunda kalır.\n\nDevam etmek istiyor musunuz?",
-                parent=win,
-            ):
-                return
-            db.sporcu_sezon_kategori_ata(
-                sporcu_id,
-                sezon,
-                yas_kategorisi=yas,
-                yaris_kategorisi=alt,
-            )
-            _st["override_kat"] = alt
-            update_kat_display()
 
-        btn_kat_degistir.config(command=on_kat_degistir)
 
         def fill_tree_kayit(rows):
             tree.delete(*tree.get_children())
@@ -2003,7 +1880,7 @@ class YarisKayitSekme(ttk.Frame):
                 )
                 return
             sporcu_id, lisans_id, _, _ = sporcu_info
-            kat = v_yaris_kat.get()
+            kat = _st["override_kat"] or _st["yas_kat"]
             kategori = None if kat in ("—", "Kategori Dışı") else kat
             try:
                 db.yaris_kayit_ekle(
@@ -2046,7 +1923,7 @@ class YarisKayitSekme(ttk.Frame):
                 messagebox.showwarning("Uyarı", "Güncellemek için bir kayıt seçin.", parent=win)
                 return
             kayit_id = int(sel_items[0])
-            kat = v_yaris_kat.get()
+            kat = _st["override_kat"] or _st["yas_kat"]
             kategori = None if kat in ("—", "Kategori Dışı") else kat
             try:
                 db.yaris_kayit_guncelle(
@@ -2100,10 +1977,6 @@ class YarisKayitSekme(ttk.Frame):
 
         def kayit_cift_tikla(_=None):
             if not tree.selection():
-                return
-            iid = tree.selection()[0]
-            if iid.startswith("grup_"):
-                tree.item(iid, open=not tree.item(iid, "open"))
                 return
             kayit_sec_forma_yukle()
 
@@ -2210,61 +2083,10 @@ class YarisKayitSekme(ttk.Frame):
             except Exception as exc:
                 messagebox.showerror("Hata", f"Dışa aktarılamadı: {exc}", parent=win)
 
-        ttk.Button(btn_frame, text="📊 K+C Sınıfla", style="Neu.TButton",
-                   command=lambda: _popup_grupla("kategori_cinsiyet")).pack(side="left", padx=2)
-        ttk.Button(btn_frame, text="🔓 Grup Kaldır", style="Neu.TButton",
-                   command=lambda: _popup_grupla(None)).pack(side="left", padx=2)
         ttk.Button(btn_frame, text="📊 Excel (Gruplu)", style="Neu.TButton",
                    command=_popup_csv_export).pack(side="left", padx=2)
         ttk.Button(btn_frame, text="🔄 Yenile", style="Neu.TButton",
                    command=refresh).pack(side="left", padx=4)
-
-        def _popup_grupla(grupla):
-            nonlocal tree
-            sec = v_yaris.get().strip()
-            secili_yaris_id = popup_yaris_map.get(sec) if sec else None
-            rows = db.yaris_kayitlari_listele(secili_yaris_id)
-
-            # Satırları hazırla
-            satirlar = []
-            for r in rows:
-                ch = _cinsiyet_harf(r["cinsiyet"])
-                kat = r["kategori"] if r["kategori"] not in ("—", "") else "—"
-                satirlar.append({
-                    "id": r["id"], "sporcu": r["sporcu"], "cinsiyet": ch,
-                    "lisans_no": r["lisans_no"],
-                    "kategori": f"{kat} ({ch})" if kat != "—" else "—",
-                    "durum": r["durum"], "kayit_tarihi": r["kayit_tarihi"],
-                    "_cinsiyet_raw": r["cinsiyet"], "_kategori_raw": r["kategori"],
-                })
-
-            tree.delete(*tree.get_children())
-            if grupla == "kategori_cinsiyet":
-                from itertools import groupby
-                def anahtar(s):
-                    k = s["_kategori_raw"] if s["_kategori_raw"] not in ("—", "") else "Belirtilmemiş"
-                    c = _cinsiyet_harf(s["_cinsiyet_raw"])
-                    return (k, c)
-                satirlar.sort(key=anahtar)
-                for g, elemanlar in groupby(satirlar, key=anahtar):
-                    kat, ch = g
-                    el = list(elemanlar)
-                    gid = f"grup_{kat}_{ch}"
-                    tree.insert("", "end", iid=gid,
-                                values=("", f"📁 {kat} — {ch} ({len(el)})", "", "", "", "", ""),
-                                tags=("group",), open=True)
-                    for s in el:
-                        tree.insert(gid, "end", iid=str(s["id"]),
-                                    values=(s["id"], s["sporcu"], s["cinsiyet"],
-                                            s["lisans_no"], s["kategori"], s["durum"], s["kayit_tarihi"]),
-                                    tags=("even",))
-            else:
-                for i, s in enumerate(satirlar):
-                    tag = "even" if i % 2 == 0 else "odd"
-                    tree.insert("", "end", iid=str(s["id"]),
-                                values=(s["id"], s["sporcu"], s["cinsiyet"],
-                                        s["lisans_no"], s["kategori"], s["durum"], s["kayit_tarihi"]),
-                                tags=(tag,))
 
         cb.bind("<<ComboboxSelected>>", refresh)
         refresh()
