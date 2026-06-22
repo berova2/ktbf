@@ -933,6 +933,16 @@ def sporcu_sezon_kategori_ata(
         )
 
 
+def sporcu_sezon_kategori_sil(sporcu_id: int, sezon: str) -> None:
+    """Sporcunun sezonluk kategori override'ını kaldırır (yaş kategorisine döner)."""
+    with get_conn() as conn:
+        conn.execute(
+            """DELETE FROM sporcu_sezon_kategorileri
+               WHERE sporcu_id = ? AND sezon = ?""",
+            (sporcu_id, sezon),
+        )
+
+
 def yaris_kayit_ekle(yaris_id: int, sporcu_id: int, lisans_id: int = None,
                      kategori: str = None, durum: str = "Onaylandı") -> int:
     with get_conn() as conn:
