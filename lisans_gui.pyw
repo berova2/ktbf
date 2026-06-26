@@ -459,12 +459,17 @@ class SporcuSekme(ttk.Frame):
     _TUM_KATEGORILER = ["U13", "U15", "U17", "U19", "Elite",
                         "Master A", "Master B", "Master C"]
 
+    _FILTRE_KATEGORILER = ["Tümü", "U13", "U15", "U17", "U19", "Elite",
+                          "Master A", "Master B", "Master C", "Kategori Dışı"]
+
     def __init__(self, parent):
         super().__init__(parent, style="TFrame")
         self._secili_id = None
         self._kulup_map: dict = {}   # kulüp adı → id  (None = Ferdi)
+        self._grup_modu = False      # gruplandırma aktif mi
         self._build()
         self._yukle_kulupler()
+        self._yukle_kategori_filtresi()
         self._listele()
 
     # ------------------------------------------------------------------
@@ -474,6 +479,14 @@ class SporcuSekme(ttk.Frame):
         self._kulup_map = {"— Ferdi —": None}
         self._kulup_map.update({r["ad"]: r["id"] for r in rows})
         self.cb_kulup["values"] = list(self._kulup_map.keys())
+        # Kulüp filtresi combobox'ını da güncelle
+        if hasattr(self, 'cb_kulup_filtre'):
+            kulup_adlari = ["Tümü"] + [r["ad"] for r in rows]
+            self.cb_kulup_filtre["values"] = kulup_adlari
+
+    def _yukle_kategori_filtresi(self):
+        """Kategori filtresi combobox'ını yükler."""
+        self.cb_kat_filtre["values"] = self._FILTRE_KATEGORILER
 
     # ------------------------------------------------------------------
     def _build(self):
@@ -585,12 +598,13 @@ class SporcuSekme(ttk.Frame):
 
         form_frame.columnconfigure(1, weight=1)
 
-        # Sağ: liste + arama
+        # Sağ: liste + arama + filtre
         list_frame = ttk.LabelFrame(pane, text="Sporcu Listesi", padding=4)
         pane.add(list_frame, weight=2)
 
+        # Arama satırı
         srch_frame = ttk.Frame(list_frame)
-        srch_frame.pack(fill="x", pady=(0, 4))
+        srch_frame.pack(fill="x", pady=(0, 2))
         ttk.Label(srch_frame, text="Ad / Kimlik No:").pack(side="left", padx=4)
         self.v_arama = tk.StringVar()
         ttk.Entry(srch_frame, textvariable=self.v_arama, width=20
@@ -599,6 +613,34 @@ class SporcuSekme(ttk.Frame):
                    command=self._ara).pack(side="left", padx=4)
         ttk.Button(srch_frame, text="Tümü", command=self._listele
                    ).pack(side="left")
+
+        # Filtre satırı
+        filtre_frame = ttk.Frame(list_frame)
+        filtre_frame.pack(fill="x", pady=(0, 2))
+        ttk.Label(filtre_frame, text="Kategori:").pack(side="left", padx=(4, 2))
+        self.v_kat_filtre = tk.StringVar(value="Tümü")
+        self.cb_kat_filtre = ttk.Combobox(filtre_frame, textvariable=self.v_kat_filtre,
+                                          values=self._FILTRE_KATEGORILER,
+                                          width=12, state="readonly")
+        self.cb_kat_filtre.pack(side="left", padx=2)
+        self.cb_kat_filtre.bind("<<ComboboxSelected>>", self._filtre_uygula)
+
+        ttk.Label(filtre_frame, text="Kulüp:").pack(side="left", padx=(8, 2))
+        self.v_kulup_filtre = tk.StringVar(value="Tümü")
+        self.cb_kulup_filtre = ttk.Combobox(filtre_frame, textvariable=self.v_kulup_filtre,
+                                            values=["Tümü"],
+                                            width=18, state="readonly")
+        self.cb_kulup_filtre.pack(side="left", padx=2)
+        self.cb_kulup_filtre.bind("<<ComboboxSelected>>", self._filtre_uygula)
+
+        ttk.Separator(filtre_frame, orient="vertical").pack(side="left", fill="y", padx=6)
+        self.v_grup_modu = tk.BooleanVar(value=False)
+        self.btn_grup = ttk.Checkbutton(filtre_frame, text="📂 Grupla",
+                                        variable=self.v_grup_modu,
+                                        command=self._grup_modu_degisti)
+        self.btn_grup.pack(side="left", padx=4)
+        ttk.Button(filtre_frame, text="🔄 Filtreyi Temizle", command=self._filtre_temizle
+                   ).pack(side="left", padx=4)
 
         cols = [("id","ID",38), ("ad","Ad",85), ("soyad","Soyad",95),
             ("cinsiyet","Cinsiyet",80),
@@ -773,33 +815,139 @@ class SporcuSekme(ttk.Frame):
                ON ssk.sporcu_id = s.id AND ssk.sezon = l.sezon
     """
 
-    def _listele(self):
+    def _filtre_kosulu(self) -> tuple[str, list]:
+        """Seçili filtrelere göre WHERE koşulu ve parametre listesi üretir."""
+        kosullar = []
+        params = []
+
+        kat = self.v_kat_filtre.get().strip()
+        if kat and kat != "Tümü":
+            kosullar.append(
+                """CASE
+                    WHEN s.dogum_tarihi IS NULL OR TRIM(s.dogum_tarihi) = '' THEN '—'
+                    WHEN (CAST(strftime('%Y','now') AS INTEGER) - CAST(substr(s.dogum_tarihi,1,4) AS INTEGER)) BETWEEN 11 AND 12 THEN 'U13'
+                    WHEN (CAST(strftime('%Y','now') AS INTEGER) - CAST(substr(s.dogum_tarihi,1,4) AS INTEGER)) BETWEEN 13 AND 14 THEN 'U15'
+                    WHEN (CAST(strftime('%Y','now') AS INTEGER) - CAST(substr(s.dogum_tarihi,1,4) AS INTEGER)) BETWEEN 15 AND 16 THEN 'U17'
+                    WHEN (CAST(strftime('%Y','now') AS INTEGER) - CAST(substr(s.dogum_tarihi,1,4) AS INTEGER)) BETWEEN 17 AND 18 THEN 'U19'
+                    WHEN (CAST(strftime('%Y','now') AS INTEGER) - CAST(substr(s.dogum_tarihi,1,4) AS INTEGER)) BETWEEN 19 AND 34 THEN 'Elite'
+                    WHEN (CAST(strftime('%Y','now') AS INTEGER) - CAST(substr(s.dogum_tarihi,1,4) AS INTEGER)) BETWEEN 35 AND 39 THEN 'Master A'
+                    WHEN (CAST(strftime('%Y','now') AS INTEGER) - CAST(substr(s.dogum_tarihi,1,4) AS INTEGER)) BETWEEN 40 AND 44 THEN 'Master B'
+                    WHEN (CAST(strftime('%Y','now') AS INTEGER) - CAST(substr(s.dogum_tarihi,1,4) AS INTEGER)) >= 45 THEN 'Master C'
+                    ELSE 'Kategori Dışı'
+                END = ?"""
+            )
+            params.append(kat)
+
+        kulup = self.v_kulup_filtre.get().strip()
+        if kulup and kulup != "Tümü":
+            kosullar.append("COALESCE(k.ad, 'Ferdi') = ?")
+            params.append(kulup)
+
+        where = ""
+        if kosullar:
+            where = " WHERE " + " AND ".join(kosullar)
+        return where, params
+
+    def _listele(self, *_):
+        where, params = self._filtre_kosulu()
+        sql = self._SPORCU_QUERY + where + " ORDER BY s.soyad, s.ad"
         with db.get_conn() as conn:
-            rows = conn.execute(
-                self._SPORCU_QUERY + " ORDER BY s.soyad, s.ad"
-            ).fetchall()
-        _fill_tree(self.tree, rows)
+            rows = conn.execute(sql, params).fetchall()
+
+        if self._grup_modu:
+            self._listele_gruplu(rows)
+        else:
+            _fill_tree(self.tree, rows)
 
     def _ara(self):
         q = self.v_arama.get().strip()
         if not q:
             self._listele()
             return
+        where, params = self._filtre_kosulu()
+        ara_kosul = " (s.kimlik_no=? OR (s.ad||' '||s.soyad) LIKE ?)"
+        if where:
+            where += " AND" + ara_kosul
+        else:
+            where = " WHERE" + ara_kosul
+        params.extend([q, f"%{q}%"])
+        sql = self._SPORCU_QUERY + where + " ORDER BY s.soyad, s.ad"
         with db.get_conn() as conn:
-            rows = conn.execute(
-                self._SPORCU_QUERY +
-                " WHERE s.kimlik_no=? OR (s.ad||' '||s.soyad) LIKE ?"
-                " ORDER BY s.soyad, s.ad",
-                (q, f"%{q}%")
-            ).fetchall()
-        _fill_tree(self.tree, rows)
+            rows = conn.execute(sql, params).fetchall()
+
+        if self._grup_modu:
+            self._listele_gruplu(rows)
+        else:
+            _fill_tree(self.tree, rows)
+
+    def _listele_gruplu(self, rows):
+        """Sporcu listesini kategori ve kulübe göre gruplandırarak gösterir."""
+        self.tree.delete(*self.tree.get_children())
+
+        # rows'u (yas_kategorisi, kulup_adi) ikilisine göre grupla
+        from collections import OrderedDict
+        gruplar: dict[tuple[str, str], list] = OrderedDict()
+        for r in rows:
+            kat = r["yas_kategorisi"] if r["yas_kategorisi"] not in ("—", "") else "Belirsiz"
+            kulup = r["kulup_adi"] if r["kulup_adi"] not in ("—", "") else "Ferdi"
+            anahtar = (kat, kulup)
+            if anahtar not in gruplar:
+                gruplar[anahtar] = []
+            gruplar[anahtar].append(r)
+
+        # Kategori sıralaması
+        KAT_SIRA = {k: i for i, k in enumerate(self._FILTRE_KATEGORILER)}
+
+        def sira_anahtar(g):
+            (kat, kulup), _ = g
+            return (KAT_SIRA.get(kat, 99), kulup)
+
+        sirali = sorted(gruplar.items(), key=sira_anahtar)
+
+        iid_counter = [0]
+        for (kat, kulup), elemanlar in sirali:
+            iid_counter[0] += 1
+            grup_id = f"grup_{iid_counter[0]}"
+            etiket = f"  📁 {kat} — {kulup}  ({len(elemanlar)} sporcu)"
+            self.tree.insert("", "end", iid=grup_id, values=[etiket, "", "", "", "", "", "", "", "", "", "", "", ""],
+                             tags=("group",))
+
+            for i, row in enumerate(elemanlar):
+                self.tree.insert(grup_id, "end", iid=str(row[0]),
+                                 values=list(row),
+                                 tags=("even" if i % 2 == 0 else "odd",))
+
+        self.tree.item(self.tree.get_children()[0]) if self.tree.get_children() else None
+
+    def _filtre_uygula(self, *_):
+        """Filtre değiştiğinde listeyi yeniler."""
+        if self.v_arama.get().strip():
+            self._ara()
+        else:
+            self._listele()
+
+    def _grup_modu_degisti(self):
+        """Gruplandırma butonu değiştiğinde listeyi yeniler."""
+        self._grup_modu = self.v_grup_modu.get()
+        self._filtre_uygula()
+
+    def _filtre_temizle(self):
+        """Tüm filtreleri sıfırlar ve listeyi yeniler."""
+        self.v_kat_filtre.set("Tümü")
+        self.v_kulup_filtre.set("Tümü")
+        self.v_arama.set("")
+        self._listele()
 
     # ------------------------------------------------------------------
     def _on_sec(self, _=None):
         sel = self.tree.selection()
         if not sel:
             return
-        self._secili_id = int(sel[0])
+        try:
+            self._secili_id = int(sel[0])
+        except ValueError:
+            # Grup başlığı seçilmiş, işlem yapma
+            return
         row = db.sporcu_getir(self._secili_id)
         if row:
             self.v_ad.set(row["ad"] or "")
