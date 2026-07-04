@@ -1642,12 +1642,13 @@ class YarisKayitSekme(ttk.Frame):
             with open(yol, "w", newline="", encoding="utf-8-sig") as f:
                 yazici = csv.writer(f)
                 yazici.writerow(["ID", "Yarış", "Yarış Tarihi", "Sporcu",
-                                 "Cinsiyet", "Lisans No", "Kategori", "Durum", "Kayıt Tarihi"])
+                                 "Takım", "Cinsiyet", "Lisans No", "Kategori", "Durum", "Kayıt Tarihi"])
                 for r in rows:
                     ch = _cinsiyet_harf(r["cinsiyet"])
+                    kulup = r["kulup_adi"]
                     yazici.writerow([
                         r["id"], r["yaris_adi"], r["yaris_tarihi"],
-                        r["sporcu"], ch, r["lisans_no"],
+                        r["sporcu"], kulup, ch, r["lisans_no"],
                         r["kategori"], r["durum"], r["kayit_tarihi"],
                     ])
             messagebox.showinfo("Başarılı", f"Dışa aktarıldı:\n{yol}")
@@ -2162,9 +2163,10 @@ class YarisKayitSekme(ttk.Frame):
             for r in rows:
                 ch = _cinsiyet_harf(r["cinsiyet"])
                 kat = r["kategori"] if r["kategori"] not in ("—", "") else "—"
+                kulup = r["kulup_adi"]
                 satirlar.append({
                     "id": r["id"], "sporcu": r["sporcu"], "cinsiyet": ch,
-                    "lisans_no": r["lisans_no"],
+                    "lisans_no": r["lisans_no"], "takim": kulup,
                     "kategori": f"{kat} ({ch})" if kat != "—" else "—",
                     "durum": r["durum"], "kayit_tarihi": r["kayit_tarihi"],
                     "_cinsiyet_raw": r["cinsiyet"], "_kategori_raw": r["kategori"],
@@ -2188,7 +2190,7 @@ class YarisKayitSekme(ttk.Frame):
                 baslik_font = Font(bold=True, size=11, color="FFFFFF")
 
                 # Başlık satırı
-                basliklar = ["Kategori", "Cinsiyet", "ID", "Sporcu", "Lisans No", "Durum", "Kayıt Tarihi"]
+                basliklar = ["Kategori", "Cinsiyet", "ID", "Sporcu", "Takım", "Lisans No", "Durum", "Kayıt Tarihi"]
                 for col, b in enumerate(basliklar, 1):
                     h = ws.cell(row=1, column=col, value=b)
                     h.font = baslik_font
@@ -2200,7 +2202,7 @@ class YarisKayitSekme(ttk.Frame):
                     kat, ch = g
                     el = list(elemanlar)
                     # Grup başlık satırı
-                    ws.merge_cells(start_row=satir_no, start_column=1, end_row=satir_no, end_column=7)
+                    ws.merge_cells(start_row=satir_no, start_column=1, end_row=satir_no, end_column=8)
                     h = ws.cell(row=satir_no, column=1,
                                 value=f"{kat} ({ch}) — {len(el)} kayıt")
                     h.font = grup_font
@@ -2212,9 +2214,10 @@ class YarisKayitSekme(ttk.Frame):
                         ws.cell(row=satir_no, column=2, value=ch)
                         ws.cell(row=satir_no, column=3, value=s["id"])
                         ws.cell(row=satir_no, column=4, value=s["sporcu"])
-                        ws.cell(row=satir_no, column=5, value=s["lisans_no"])
-                        ws.cell(row=satir_no, column=6, value=s["durum"])
-                        ws.cell(row=satir_no, column=7, value=s["kayit_tarihi"])
+                        ws.cell(row=satir_no, column=5, value=s["takim"])
+                        ws.cell(row=satir_no, column=6, value=s["lisans_no"])
+                        ws.cell(row=satir_no, column=7, value=s["durum"])
+                        ws.cell(row=satir_no, column=8, value=s["kayit_tarihi"])
                         satir_no += 1
 
                 # Sütun genişlikleri
@@ -2222,9 +2225,10 @@ class YarisKayitSekme(ttk.Frame):
                 ws.column_dimensions['B'].width = 10
                 ws.column_dimensions['C'].width = 8
                 ws.column_dimensions['D'].width = 28
-                ws.column_dimensions['E'].width = 14
+                ws.column_dimensions['E'].width = 20
                 ws.column_dimensions['F'].width = 14
-                ws.column_dimensions['G'].width = 16
+                ws.column_dimensions['G'].width = 14
+                ws.column_dimensions['H'].width = 16
 
                 wb.save(yol)
                 messagebox.showinfo("Başarılı", f"Excel dosyası kaydedildi:\n{yol}", parent=win)

@@ -1022,11 +1022,13 @@ def yaris_kayitlari_listele(yaris_id: int = None) -> list:
                       yk.durum,
                       yk.kayit_tarihi,
                       s.cinsiyet,
-                      s.dogum_tarihi
+                      s.dogum_tarihi,
+                      COALESCE(k.ad, 'Ferdi') AS kulup_adi
                FROM yaris_kayitlari yk
                JOIN yarislar y ON y.id = yk.yaris_id
                JOIN sporcular s ON s.id = yk.sporcu_id
-               JOIN lisanslar l ON l.id = yk.lisans_id"""
+               JOIN lisanslar l ON l.id = yk.lisans_id
+               LEFT JOIN kulupler k ON k.id = l.kulup_id"""
         )
         params = ()
         if yaris_id is not None:
