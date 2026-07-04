@@ -941,12 +941,13 @@ class SporcuSekme(ttk.Frame):
         self._listele()
 
     def _sporculari_excel_export(self):
-        """Mevcut sporcu listesini Excel (.xlsx) olarak dışa aktarır."""
+        """Mevcut sporcu listesini kulüp bazında gruplandırarak Excel (.xlsx) olarak dışa aktarır."""
         from openpyxl import Workbook
         from openpyxl.styles import Font, PatternFill, Alignment
         from tkinter import filedialog
+        from itertools import groupby
 
-        rows = []
+        raw_rows = []
         for child in self.tree.get_children():
             # Grup başlıklarını (string ID) atla
             try:
@@ -954,42 +955,63 @@ class SporcuSekme(ttk.Frame):
             except ValueError:
                 continue
             values = self.tree.item(child, "values")
-            if values:
-                rows.append(values)
+            if values and len(values) >= 13:
+                raw_rows.append(list(values))
 
-        if not rows:
+        if not raw_rows:
             messagebox.showinfo("Bilgi", "Dışa aktarılacak sporcu bulunamadı.")
             return
 
         yol = filedialog.asksaveasfilename(
-            title="Excel olarak kaydet",
+            title="Excel olarak kaydet (Gruplu)",
             defaultextension=".xlsx",
             filetypes=[("Excel Dosyası", "*.xlsx")],
-            initialfile="sporcu_listesi.xlsx",
+            initialfile="sporcu_listesi_gruplu.xlsx",
         )
         if not yol:
             return
+
+        # Kulüp adına göre sırala (12. sütun = indeks 11)
+        raw_rows.sort(key=lambda r: r[11] if r[11] else "")
 
         try:
             wb = Workbook()
             ws = wb.active
             ws.title = "Sporcu Listesi"
 
-            baslik_fill = PatternFill(start_color="1A3C6E", end_color="1A3C6E", fill_type="solid")
+            grup_font = Font(bold=True, size=11, color="FFFFFF")
+            grup_fill = PatternFill(start_color="1A3C6E", end_color="1A3C6E", fill_type="solid")
+            baslik_fill = PatternFill(start_color="2563EB", end_color="2563EB", fill_type="solid")
             baslik_font = Font(bold=True, size=11, color="FFFFFF")
+
             basliklar = ["ID", "Ad", "Soyad", "Cinsiyet", "Kimlik No",
                          "Doğum Tarihi", "Yaş Kategorisi", "Yarış Kategorisi",
                          "Uyruk", "Telefon", "Lisans No", "Kulüp", "BYS"]
+            KOLON_SAY = len(basliklar)
 
+            # Başlık satırı
             for col, b in enumerate(basliklar, 1):
                 h = ws.cell(row=1, column=col, value=b)
                 h.font = baslik_font
                 h.fill = baslik_fill
                 h.alignment = Alignment(horizontal="center")
 
-            for i, row in enumerate(rows, start=2):
-                for j, val in enumerate(row, 1):
-                    ws.cell(row=i, column=j, value=val)
+            satir_no = 2
+            for kulup, grp in groupby(raw_rows, key=lambda r: r[11] if r[11] else "Belirtilmemiş"):
+                grp_list = list(grp)
+                # Grup başlık satırı
+                ws.merge_cells(start_row=satir_no, start_column=1,
+                               end_row=satir_no, end_column=KOLON_SAY)
+                h = ws.cell(row=satir_no, column=1,
+                            value=f"📁 {kulup}  ({len(grp_list)} sporcu)")
+                h.font = grup_font
+                h.fill = grup_fill
+                satir_no += 1
+                # Sporcu satırları
+                for row in grp_list:
+                    for j, val in enumerate(row, 1):
+                        ws.cell(row=satir_no, column=j, value=val)
+                    satir_no += 1
 
             # Sütun genişlikleri
             genislikler = [6, 18, 18, 12, 18, 14, 18, 18, 8, 16, 16, 22, 6]
