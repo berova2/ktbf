@@ -641,6 +641,8 @@ class SporcuSekme(ttk.Frame):
         self.btn_grup.pack(side="left", padx=4)
         ttk.Button(filtre_frame, text="🔄 Filtreyi Temizle", command=self._filtre_temizle
                    ).pack(side="left", padx=4)
+        ttk.Button(filtre_frame, text="📊 Excel Oluştur", style="Neu.TButton",
+                   command=self._sporculari_excel_export).pack(side="left", padx=4)
 
         cols = [("id","ID",38), ("ad","Ad",85), ("soyad","Soyad",95),
             ("cinsiyet","Cinsiyet",80),
@@ -937,6 +939,67 @@ class SporcuSekme(ttk.Frame):
         self.v_kulup_filtre.set("Tümü")
         self.v_arama.set("")
         self._listele()
+
+    def _sporculari_excel_export(self):
+        """Mevcut sporcu listesini Excel (.xlsx) olarak dışa aktarır."""
+        from openpyxl import Workbook
+        from openpyxl.styles import Font, PatternFill, Alignment
+        from tkinter import filedialog
+
+        rows = []
+        for child in self.tree.get_children():
+            # Grup başlıklarını (string ID) atla
+            try:
+                int(child)
+            except ValueError:
+                continue
+            values = self.tree.item(child, "values")
+            if values:
+                rows.append(values)
+
+        if not rows:
+            messagebox.showinfo("Bilgi", "Dışa aktarılacak sporcu bulunamadı.")
+            return
+
+        yol = filedialog.asksaveasfilename(
+            title="Excel olarak kaydet",
+            defaultextension=".xlsx",
+            filetypes=[("Excel Dosyası", "*.xlsx")],
+            initialfile="sporcu_listesi.xlsx",
+        )
+        if not yol:
+            return
+
+        try:
+            wb = Workbook()
+            ws = wb.active
+            ws.title = "Sporcu Listesi"
+
+            baslik_fill = PatternFill(start_color="1A3C6E", end_color="1A3C6E", fill_type="solid")
+            baslik_font = Font(bold=True, size=11, color="FFFFFF")
+            basliklar = ["ID", "Ad", "Soyad", "Cinsiyet", "Kimlik No",
+                         "Doğum Tarihi", "Yaş Kategorisi", "Yarış Kategorisi",
+                         "Uyruk", "Telefon", "Lisans No", "Kulüp", "BYS"]
+
+            for col, b in enumerate(basliklar, 1):
+                h = ws.cell(row=1, column=col, value=b)
+                h.font = baslik_font
+                h.fill = baslik_fill
+                h.alignment = Alignment(horizontal="center")
+
+            for i, row in enumerate(rows, start=2):
+                for j, val in enumerate(row, 1):
+                    ws.cell(row=i, column=j, value=val)
+
+            # Sütun genişlikleri
+            genislikler = [6, 18, 18, 12, 18, 14, 18, 18, 8, 16, 16, 22, 6]
+            for col, w in enumerate(genislikler, 1):
+                ws.column_dimensions[chr(64 + col)].width = w
+
+            wb.save(yol)
+            messagebox.showinfo("Başarılı", f"Dışa aktarıldı:\n{yol}")
+        except Exception as exc:
+            messagebox.showerror("Hata", f"Dışa aktarılamadı: {exc}")
 
     # ------------------------------------------------------------------
     def _on_sec(self, _=None):
@@ -3049,6 +3112,176 @@ class EvrakSablonPenceresi(tk.Toplevel):
 
 
 # ---------------------------------------------------------------------------
+# Geçmiş Sezon Görüntüleme Penceresi
+# ---------------------------------------------------------------------------
+
+class GecmisSezonPenceresi(tk.Toplevel):
+    """temp/ klasöründeki Excel dosyalarından geçmiş sezon verilerini gösterir."""
+
+    def __init__(self, parent: tk.Misc, okuyucu_modulu):
+        super().__init__(parent)
+        self._okuyucu = okuyucu_modulu
+        self.title("📁 Geçmiş Sezon Verileri")
+        self.configure(bg=BG)
+        _apply_window_geometry(self, width_ratio=0.72, height_ratio=0.75,
+                               min_width=800, min_height=560)
+
+        sezonlar = self._okuyucu.mevcut_sezonlar()
+        if not sezonlar:
+            ttk.Label(self, text="Hiçbir Excel dosyası bulunamadı.\ntemp/ klasörünü kontrol edin.",
+                      font=FONT).pack(expand=True)
+            return
+
+        # ── Üst kontroller ──────────────────────────────────────────────
+        ust = ttk.Frame(self)
+        ust.pack(fill="x", padx=8, pady=(8, 4))
+
+        ttk.Label(ust, text="Sezon:").pack(side="left", padx=(0, 4))
+        self.v_sezon = tk.StringVar(value=str(sezonlar[-1]))
+        cb_sezon = ttk.Combobox(ust, textvariable=self.v_sezon,
+                                values=[str(s) for s in sezonlar],
+                                width=8, state="readonly")
+        cb_sezon.pack(side="left", padx=4)
+        cb_sezon.bind("<<ComboboxSelected>>", lambda _: self._listeyi_yenile())
+
+        ttk.Separator(ust, orient="vertical").pack(side="left", fill="y", padx=8)
+
+        self.v_goruntu = tk.StringVar(value="Sporcular")
+        for deger, etiket in [("Sporcular", "🚴 Sporcular"),
+                             ("Kulupler", "🏢 Kulüpler")]:
+            rb = ttk.Radiobutton(ust, text=etiket, variable=self.v_goruntu,
+                                 value=deger, command=self._listeyi_yenile)
+            rb.pack(side="left", padx=4)
+
+        ttk.Separator(ust, orient="vertical").pack(side="left", fill="y", padx=8)
+
+        self.lbl_sayac = ttk.Label(ust, text="", font=FONT_B)
+        self.lbl_sayac.pack(side="left", padx=4)
+
+        ttk.Button(ust, text="🔄 Yenile", style="Neu.TButton",
+                   command=self._listeyi_yenile).pack(side="right", padx=4)
+        ttk.Button(ust, text="📊 Excel'e Aktar", style="Neu.TButton",
+                   command=self._excele_aktar).pack(side="right", padx=4)
+
+        # ── Liste ───────────────────────────────────────────────────────
+        cols_sporcu = [
+            ("ad_soyad", "Ad Soyad", 200),
+            ("lisans_no", "Lisans No", 110),
+            ("kulup", "Kulüp", 200),
+            ("cinsiyet", "Cinsiyet", 80),
+            ("dogum", "Doğum", 160),
+            ("telefon", "Telefon", 130),
+        ]
+        cols_kulup = [
+            ("kulup_adi", "Kulüp Adı", 350),
+            ("sporcu_sayisi", "Sporcu Sayısı", 140),
+        ]
+        self._cols_sporcu = cols_sporcu
+        self._cols_kulup = cols_kulup
+
+        tf, self.tree = _make_tree(self, cols_sporcu)
+        tf.pack(fill="both", expand=True, padx=8, pady=(4, 8))
+
+        self._listeyi_yenile()
+
+    def _listeyi_yenile(self):
+        sezon = int(self.v_sezon.get())
+        goruntu = self.v_goruntu.get()
+
+        if goruntu == "Sporcular":
+            self.tree.configure(columns=[c[0] for c in self._cols_sporcu],
+                                show="headings")
+            for cid, ctitle, cw in self._cols_sporcu:
+                self.tree.heading(cid, text=ctitle)
+                self.tree.column(cid, width=_scaled(cw), minwidth=_scaled(40))
+            rows = self._okuyucu.sporcular_listele(sezon)
+            self.tree.delete(*self.tree.get_children())
+            for i, r in enumerate(rows):
+                tag = "even" if i % 2 == 0 else "odd"
+                self.tree.insert("", "end", iid=str(i),
+                                 values=(r["ad_soyad"], r["lisans_no"],
+                                         r["kulup"], r["cinsiyet"],
+                                         r["dogum"], r["telefon"]),
+                                 tags=(tag,))
+            self.lbl_sayac.config(text=f"{len(rows)} sporcu")
+        else:
+            self.tree.configure(columns=[c[0] for c in self._cols_kulup],
+                                show="headings")
+            for cid, ctitle, cw in self._cols_kulup:
+                self.tree.heading(cid, text=ctitle)
+                self.tree.column(cid, width=_scaled(cw), minwidth=_scaled(40))
+            rows = self._okuyucu.kulupler_listele(sezon)
+            self.tree.delete(*self.tree.get_children())
+            for i, r in enumerate(rows):
+                tag = "even" if i % 2 == 0 else "odd"
+                self.tree.insert("", "end", iid=str(i),
+                                 values=(r["kulup_adi"], r["sporcu_sayisi"]),
+                                 tags=(tag,))
+            self.lbl_sayac.config(text=f"{len(rows)} kulüp")
+
+    def _excele_aktar(self):
+        """Görüntülenen listeyi Excel olarak dışa aktarır."""
+        from openpyxl import Workbook
+        from openpyxl.styles import Font, PatternFill, Alignment
+        from tkinter import filedialog
+
+        sezon = int(self.v_sezon.get())
+        goruntu = self.v_goruntu.get()
+        rows = []
+        basliklar = []
+
+        if goruntu == "Sporcular":
+            basliklar = ["Ad Soyad", "Lisans No", "Kulüp", "Cinsiyet", "Doğum", "Telefon"]
+            for child in self.tree.get_children():
+                vals = self.tree.item(child, "values")
+                if vals:
+                    rows.append(list(vals))
+        else:
+            basliklar = ["Kulüp Adı", "Sporcu Sayısı"]
+            for child in self.tree.get_children():
+                vals = self.tree.item(child, "values")
+                if vals:
+                    rows.append(list(vals))
+
+        if not rows:
+            messagebox.showinfo("Bilgi", "Dışa aktarılacak veri bulunamadı.", parent=self)
+            return
+
+        yol = filedialog.asksaveasfilename(
+            title="Excel olarak kaydet",
+            defaultextension=".xlsx",
+            filetypes=[("Excel Dosyası", "*.xlsx")],
+            initialfile=f"{sezon}_{goruntu.lower()}.xlsx",
+            parent=self,
+        )
+        if not yol:
+            return
+
+        try:
+            wb = Workbook()
+            ws = wb.active
+            ws.title = f"{sezon} {goruntu}"
+
+            baslik_fill = PatternFill(start_color="1A3C6E", end_color="1A3C6E", fill_type="solid")
+            baslik_font = Font(bold=True, size=11, color="FFFFFF")
+
+            for col, b in enumerate(basliklar, 1):
+                h = ws.cell(row=1, column=col, value=b)
+                h.font = baslik_font
+                h.fill = baslik_fill
+                h.alignment = Alignment(horizontal="center")
+
+            for i, row in enumerate(rows, start=2):
+                for j, val in enumerate(row, 1):
+                    ws.cell(row=i, column=j, value=val)
+
+            wb.save(yol)
+            messagebox.showinfo("Başarılı", f"Dışa aktarıldı:\n{yol}", parent=self)
+        except Exception as exc:
+            messagebox.showerror("Hata", f"Dışa aktarılamadı: {exc}", parent=self)
+
+
+# ---------------------------------------------------------------------------
 # Ana uygulama
 # ---------------------------------------------------------------------------
 
@@ -3070,6 +3303,8 @@ class App(tk.Tk):
                  text="  🚴 Kıbrıs Türk Bisiklet Federasyonu – Lisans Kayıt Sistemi",
                  bg=HEADER, fg="white",
              font=FONT_H).pack(side="left", pady=_scaled(4))
+        ttk.Button(hdr, text="📁 Geçmiş Sezonlar", style="Neu.TButton",
+                   command=self._gecmis_sezon_ac).pack(side="right", padx=4, pady=_scaled(4))
         ttk.Button(hdr, text="🌐 Anasayfa", style="Neu.TButton",
                    command=self._anasayfa_penceresi_ac).pack(side="right", padx=4, pady=_scaled(4))
 
@@ -3130,6 +3365,15 @@ class App(tk.Tk):
             time.sleep(0.12)
             self.update_idletasks()
         return False
+
+    def _gecmis_sezon_ac(self):
+        """Geçmiş sezon Excel dosyalarını görüntüleme penceresi açar."""
+        try:
+            import temp.excel_okuyucu as excel_okuyucu
+        except ImportError:
+            messagebox.showerror("Hata", "excel_okuyucu modülü bulunamadı.")
+            return
+        GecmisSezonPenceresi(self, excel_okuyucu)
 
     def _anasayfa_penceresi_ac(self):
         """Anasayfayı localhost üzerinden tarayıcıda aç."""
