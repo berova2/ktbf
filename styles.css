@@ -250,6 +250,13 @@ body {
   list-style: none;
 }
 
+.downloads li .press-date {
+  display: inline-block;
+  min-width: 8rem;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
 #galeri p {
   margin: 0.65rem 0 1.2rem;
 }
