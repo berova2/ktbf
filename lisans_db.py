@@ -233,6 +233,7 @@ CREATE TABLE IF NOT EXISTS sporcu_sezon_kategorileri (
     sezon           TEXT    NOT NULL,
     yas_kategorisi  TEXT    NOT NULL,
     yaris_kategorisi TEXT   NOT NULL,
+    mtb_kategorisi  TEXT,
     kayit_tarihi    TEXT    NOT NULL DEFAULT (date('now')),
     UNIQUE(sporcu_id, sezon)
 );
@@ -273,6 +274,16 @@ def init_db():
                 """ALTER TABLE sporcular
                    ADD COLUMN cinsiyet TEXT NOT NULL DEFAULT 'Belirtilmedi'
                    CHECK(cinsiyet IN ('Erkek','Kadın','Belirtilmedi'))"""
+            )
+        kategori_kolonlari = {
+            row["name"]
+            for row in conn.execute(
+                "PRAGMA table_info(sporcu_sezon_kategorileri)"
+            ).fetchall()
+        }
+        if "mtb_kategorisi" not in kategori_kolonlari:
+            conn.execute(
+                "ALTER TABLE sporcu_sezon_kategorileri ADD COLUMN mtb_kategorisi TEXT"
             )
     print(f"Veritabanı hazır: {DB_PATH}")
 
@@ -879,27 +890,40 @@ def aktif_lisansli_sporcular() -> list:
         ).fetchall()
 
 
-def sporcu_sezon_kayitli_kategori(sporcu_id: int, sezon: str) -> Optional[str]:
-    """Sporcunun bu sezonda kayıtlı yarış kategorisini döner (varsa)."""
+def sporcu_sezon_kayitli_kategori(
+    sporcu_id: int, sezon: str, disiplin: str = "Yol"
+) -> Optional[str]:
+    """Sporcunun sezondaki yol veya MTB yarış kategorisini döner (varsa)."""
+    kategori_alani = "mtb_kategorisi" if disiplin == "MTB" else "yaris_kategorisi"
     with get_conn() as conn:
         row = conn.execute(
-            """SELECT yaris_kategorisi
+            f"""SELECT {kategori_alani} AS kategori
                FROM sporcu_sezon_kategorileri
                WHERE sporcu_id = ? AND sezon = ?
                ORDER BY id DESC LIMIT 1""",
             (sporcu_id, sezon),
         ).fetchone()
-        if row:
-            return row["yaris_kategorisi"]
+        if row and row["kategori"]:
+            return row["kategori"]
 
-        row = conn.execute(
-            """SELECT yk.kategori
-               FROM yaris_kayitlari yk
-               JOIN yarislar y ON y.id = yk.yaris_id
-               WHERE yk.sporcu_id = ? AND y.sezon = ?
-               ORDER BY yk.id DESC LIMIT 1""",
-            (sporcu_id, sezon),
-        ).fetchone()
+        if disiplin == "MTB":
+            row = conn.execute(
+                """SELECT yk.kategori
+                   FROM yaris_kayitlari yk
+                   JOIN yarislar y ON y.id = yk.yaris_id
+                   WHERE yk.sporcu_id = ? AND y.sezon = ? AND y.disiplin = 'MTB'
+                   ORDER BY yk.id DESC LIMIT 1""",
+                (sporcu_id, sezon),
+            ).fetchone()
+        else:
+            row = conn.execute(
+                """SELECT yk.kategori
+                   FROM yaris_kayitlari yk
+                   JOIN yarislar y ON y.id = yk.yaris_id
+                   WHERE yk.sporcu_id = ? AND y.sezon = ? AND y.disiplin <> 'MTB'
+                   ORDER BY yk.id DESC LIMIT 1""",
+                (sporcu_id, sezon),
+            ).fetchone()
     return row["kategori"] if row else None
 
 
@@ -919,17 +943,19 @@ def sporcu_sezon_kategori_ata(
     sezon: str,
     yas_kategorisi: str,
     yaris_kategorisi: str,
+    mtb_kategorisi: str = None,
 ) -> None:
     with get_conn() as conn:
         conn.execute(
             """INSERT INTO sporcu_sezon_kategorileri
-               (sporcu_id, sezon, yas_kategorisi, yaris_kategorisi)
-               VALUES (?,?,?,?)
+               (sporcu_id, sezon, yas_kategorisi, yaris_kategorisi, mtb_kategorisi)
+               VALUES (?,?,?,?,?)
                ON CONFLICT(sporcu_id, sezon)
                DO UPDATE SET
                    yas_kategorisi=excluded.yas_kategorisi,
-                   yaris_kategorisi=excluded.yaris_kategorisi""",
-            (sporcu_id, sezon, yas_kategorisi, yaris_kategorisi),
+                   yaris_kategorisi=excluded.yaris_kategorisi,
+                   mtb_kategorisi=excluded.mtb_kategorisi""",
+            (sporcu_id, sezon, yas_kategorisi, yaris_kategorisi, mtb_kategorisi),
         )
 
 

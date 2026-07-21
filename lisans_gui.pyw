@@ -596,6 +596,21 @@ class SporcuSekme(ttk.Frame):
         self.cb_yaris_kategorisi.bind("<<ComboboxSelected>>",
                                        self._yaris_kategorisi_degisti)
 
+        ttk.Label(form_frame, text="MTB Kategorisi").grid(
+            row=17, column=0, sticky="e", padx=(8, 4), pady=4)
+        self.v_mtb_kategorisi = tk.StringVar(value="—")
+        self.cb_mtb_kategorisi = ttk.Combobox(
+            form_frame,
+            textvariable=self.v_mtb_kategorisi,
+            values=self._TUM_KATEGORILER,
+            width=14,
+            state="readonly",
+        )
+        self.cb_mtb_kategorisi.grid(
+            row=17, column=1, sticky="w", padx=(0, 8), pady=4)
+        self.cb_mtb_kategorisi.bind("<<ComboboxSelected>>",
+                                     self._mtb_kategorisi_degisti)
+
         form_frame.columnconfigure(1, weight=1)
 
         # Sağ: liste + arama + filtre
@@ -649,6 +664,7 @@ class SporcuSekme(ttk.Frame):
             ("kimlik_no","Kimlik No",105), ("dogum_tarihi","Doğum",82),
             ("yas_kategorisi","Yaş Kategorisi",120),
             ("yaris_kategorisi","Yarış Kategorisi",120),
+            ("mtb_kategorisi","MTB Kategorisi",120),
             ("uyruk","Uyruk",48), ("telefon","Telefon",100),
             ("lisans_no","Lisans No",88), ("kulup_adi","Kulüp",130),
             ("spor_dairesi_kayitli","BYS",38)]
@@ -710,39 +726,58 @@ class SporcuSekme(ttk.Frame):
         else:
             secenekler = [yas_kat]
         self.cb_yaris_kategorisi["values"] = secenekler
+        self.cb_mtb_kategorisi["values"] = secenekler
 
         sezon = self.v_sezon.get().strip() or "2026"
         yaris_kat = yas_kat
+        mtb_kat = yas_kat
         if self._secili_id and sezon:
-            secim = db.sporcu_sezon_kayitli_kategori(self._secili_id, sezon)
-            if secim:
-                yaris_kat = secim
+            kayit = db.sporcu_sezon_kategori_getir(self._secili_id, sezon)
+            if kayit:
+                yaris_kat = kayit["yaris_kategorisi"] or yas_kat
+                mtb_kat = kayit["mtb_kategorisi"] or yas_kat
+            else:
+                secim = db.sporcu_sezon_kayitli_kategori(self._secili_id, sezon)
+                if secim:
+                    yaris_kat = secim
 
         self.v_yaris_kategorisi.set(yaris_kat)
+        self.v_mtb_kategorisi.set(mtb_kat)
         # Combobox yazı rengi: override varsa mavi, yoksa normal
         self.cb_yaris_kategorisi.configure(
             foreground=ACCENT if yaris_kat != yas_kat else "black"
         )
+        self.cb_mtb_kategorisi.configure(
+            foreground=ACCENT if mtb_kat != yas_kat else "black"
+        )
 
     def _yaris_kategorisi_degisti(self, _=None):
-        """Combobox'tan seçilen yarış kategorisini doğrudan kaydeder."""
+        """Combobox'tan seçilen yol yarış kategorisini doğrudan kaydeder."""
+        self._kategorileri_kaydet()
+
+    def _mtb_kategorisi_degisti(self, _=None):
+        """Combobox'tan seçilen MTB kategorisini doğrudan kaydeder."""
+        self._kategorileri_kaydet()
+
+    def _kategorileri_kaydet(self):
         if not self._secili_id:
             return
-        secilen = self.v_yaris_kategorisi.get().strip()
-        if not secilen or secilen == "—":
+        yaris_kat = self.v_yaris_kategorisi.get().strip()
+        mtb_kat = self.v_mtb_kategorisi.get().strip()
+        if not yaris_kat or yaris_kat == "—" or not mtb_kat or mtb_kat == "—":
             return
         yas_kat = self._hesapla_yas_kategorisi(self.v_dogum.get().strip())
         sezon = self.v_sezon.get().strip() or "2026"
 
-        if secilen == yas_kat:
-            # Yaş kategorisiyle aynı seçilmiş → override'ı temizle
+        if yaris_kat == yas_kat and mtb_kat == yas_kat:
             db.sporcu_sezon_kategori_sil(self._secili_id, sezon)
         else:
             db.sporcu_sezon_kategori_ata(
                 self._secili_id,
                 sezon,
                 yas_kategorisi=yas_kat,
-                yaris_kategorisi=secilen,
+                yaris_kategorisi=yaris_kat,
+                mtb_kategorisi=mtb_kat,
             )
         self._kategori_gorunumu_guncelle()
 
@@ -802,6 +837,29 @@ class SporcuSekme(ttk.Frame):
                        ELSE 'Kategori Dışı'
                    END
                ) AS yaris_kategorisi,
+               COALESCE(
+                   ssk.mtb_kategorisi,
+                   CASE
+                       WHEN s.dogum_tarihi IS NULL OR TRIM(s.dogum_tarihi) = '' THEN '—'
+                       WHEN (CAST(strftime('%Y','now') AS INTEGER) - CAST(substr(s.dogum_tarihi,1,4) AS INTEGER)) BETWEEN 11 AND 12
+                           THEN 'U13'
+                       WHEN (CAST(strftime('%Y','now') AS INTEGER) - CAST(substr(s.dogum_tarihi,1,4) AS INTEGER)) BETWEEN 13 AND 14
+                           THEN 'U15'
+                       WHEN (CAST(strftime('%Y','now') AS INTEGER) - CAST(substr(s.dogum_tarihi,1,4) AS INTEGER)) BETWEEN 15 AND 16
+                           THEN 'U17'
+                       WHEN (CAST(strftime('%Y','now') AS INTEGER) - CAST(substr(s.dogum_tarihi,1,4) AS INTEGER)) BETWEEN 17 AND 18
+                           THEN 'U19'
+                       WHEN (CAST(strftime('%Y','now') AS INTEGER) - CAST(substr(s.dogum_tarihi,1,4) AS INTEGER)) BETWEEN 19 AND 34
+                           THEN 'Elite'
+                       WHEN (CAST(strftime('%Y','now') AS INTEGER) - CAST(substr(s.dogum_tarihi,1,4) AS INTEGER)) BETWEEN 35 AND 39
+                           THEN 'Master A'
+                       WHEN (CAST(strftime('%Y','now') AS INTEGER) - CAST(substr(s.dogum_tarihi,1,4) AS INTEGER)) BETWEEN 40 AND 44
+                           THEN 'Master B'
+                       WHEN (CAST(strftime('%Y','now') AS INTEGER) - CAST(substr(s.dogum_tarihi,1,4) AS INTEGER)) >= 45
+                           THEN 'Master C'
+                       ELSE 'Kategori Dışı'
+                   END
+               ) AS mtb_kategorisi,
                s.uyruk, s.telefon,
                COALESCE(l.lisans_no, '—')  AS lisans_no,
                COALESCE(k.ad, 'Ferdi')     AS kulup_adi,
@@ -911,7 +969,7 @@ class SporcuSekme(ttk.Frame):
             iid_counter[0] += 1
             grup_id = f"grup_{iid_counter[0]}"
             etiket = f"  📁 {kat} — {kulup}  ({len(elemanlar)} sporcu)"
-            self.tree.insert("", "end", iid=grup_id, values=[etiket, "", "", "", "", "", "", "", "", "", "", "", ""],
+            self.tree.insert("", "end", iid=grup_id, values=[etiket, "", "", "", "", "", "", "", "", "", "", "", "", ""],
                              tags=("group",))
 
             for i, row in enumerate(elemanlar):
@@ -955,7 +1013,7 @@ class SporcuSekme(ttk.Frame):
             except ValueError:
                 continue
             values = self.tree.item(child, "values")
-            if values and len(values) >= 13:
+            if values and len(values) >= 14:
                 raw_rows.append(list(values))
 
         if not raw_rows:
@@ -971,8 +1029,8 @@ class SporcuSekme(ttk.Frame):
         if not yol:
             return
 
-        # Kulüp adına göre sırala (12. sütun = indeks 11)
-        raw_rows.sort(key=lambda r: r[11] if r[11] else "")
+        # Kulüp adına göre sırala (13. sütun = indeks 12)
+        raw_rows.sort(key=lambda r: r[12] if r[12] else "")
 
         try:
             wb = Workbook()
@@ -986,7 +1044,7 @@ class SporcuSekme(ttk.Frame):
 
             basliklar = ["ID", "Ad", "Soyad", "Cinsiyet", "Kimlik No",
                          "Doğum Tarihi", "Yaş Kategorisi", "Yarış Kategorisi",
-                         "Uyruk", "Telefon", "Lisans No", "Kulüp", "BYS"]
+                         "MTB Kategorisi", "Uyruk", "Telefon", "Lisans No", "Kulüp", "BYS"]
             KOLON_SAY = len(basliklar)
 
             # Başlık satırı
@@ -997,7 +1055,7 @@ class SporcuSekme(ttk.Frame):
                 h.alignment = Alignment(horizontal="center")
 
             satir_no = 2
-            for kulup, grp in groupby(raw_rows, key=lambda r: r[11] if r[11] else "Belirtilmemiş"):
+            for kulup, grp in groupby(raw_rows, key=lambda r: r[12] if r[12] else "Belirtilmemiş"):
                 grp_list = list(grp)
                 # Grup başlık satırı
                 ws.merge_cells(start_row=satir_no, start_column=1,
@@ -1014,7 +1072,7 @@ class SporcuSekme(ttk.Frame):
                     satir_no += 1
 
             # Sütun genişlikleri
-            genislikler = [6, 18, 18, 12, 18, 14, 18, 18, 8, 16, 16, 22, 6]
+            genislikler = [6, 18, 18, 12, 18, 14, 18, 18, 18, 8, 16, 16, 22, 6]
             for col, w in enumerate(genislikler, 1):
                 ws.column_dimensions[chr(64 + col)].width = w
 
@@ -1191,7 +1249,9 @@ class SporcuSekme(ttk.Frame):
         self.v_evrak_baska_fed.set(0)
         self.v_yas_kategorisi.set("—")
         self.v_yaris_kategorisi.set("—")
+        self.v_mtb_kategorisi.set("—")
         self.cb_yaris_kategorisi.configure(foreground="black")
+        self.cb_mtb_kategorisi.configure(foreground="black")
         self._secili_id = None
         self.tree.selection_remove(*self.tree.selection())
 
@@ -1929,6 +1989,7 @@ class YarisKayitSekme(ttk.Frame):
         tum_yarislar = db.yarislar_listele()
         popup_yaris_map  = {self._yaris_label(r): r["id"]     for r in tum_yarislar}
         yaris_sezon_map  = {r["id"]: (r["sezon"] or "")       for r in tum_yarislar}
+        yaris_disiplin_map = {r["id"]: (r["disiplin"] or "") for r in tum_yarislar}
 
         if yaris_id is not None:
             row0 = db.yaris_getir(yaris_id)
@@ -2046,6 +2107,20 @@ class YarisKayitSekme(ttk.Frame):
             yid = popup_yaris_map.get(v_yaris.get().strip())
             return yaris_sezon_map.get(yid, "") if yid else ""
 
+        def get_secili_disiplin():
+            yid = popup_yaris_map.get(v_yaris.get().strip())
+            return yaris_disiplin_map.get(yid, "Yol") if yid else "Yol"
+
+        def get_sporcu_yaris_kategorisi(sporcu_id):
+            sezon = get_secili_sezon()
+            kategori = (
+                db.sporcu_sezon_kayitli_kategori(
+                    sporcu_id, sezon, get_secili_disiplin()
+                )
+                if sezon else None
+            )
+            return kategori or _st["yas_kat"]
+
         def update_kat_display():
             yas = _st["yas_kat"]
             ov  = _st["override_kat"]
@@ -2071,7 +2146,12 @@ class YarisKayitSekme(ttk.Frame):
             lbl_yas_kat.config(text=f"{yas_kat} ({ch})")
             # Bu sezonda zaten kayıtlı kategorisi var mı?
             sezon = get_secili_sezon()
-            ov = db.sporcu_sezon_kayitli_kategori(sporcu_id, sezon) if sezon else None
+            ov = (
+                db.sporcu_sezon_kayitli_kategori(
+                    sporcu_id, sezon, get_secili_disiplin()
+                )
+                if sezon else None
+            )
             _st["override_kat"] = ov if (ov and ov != yas_kat) else None
             update_kat_display()
 
@@ -2114,7 +2194,7 @@ class YarisKayitSekme(ttk.Frame):
                 )
                 return
             sporcu_id, lisans_id, _, _ = sporcu_info
-            kat = _st["override_kat"] or _st["yas_kat"]
+            kat = get_sporcu_yaris_kategorisi(sporcu_id)
             kategori = None if kat in ("—", "Kategori Dışı") else kat
             try:
                 db.yaris_kayit_ekle(
