@@ -3421,6 +3421,11 @@ class GecmisSezonPenceresi(tk.Toplevel):
 
         ttk.Separator(ust, orient="vertical").pack(side="left", fill="y", padx=8)
 
+        ttk.Label(ust, text="Sporcu adı:").pack(side="left", padx=(0, 4))
+        self.v_sporcu_arama = tk.StringVar()
+        self.v_sporcu_arama.trace_add("write", lambda *_: self._listeyi_yenile())
+        ttk.Entry(ust, textvariable=self.v_sporcu_arama, width=22).pack(side="left", padx=4)
+
         self.lbl_sayac = ttk.Label(ust, text="", font=FONT_B)
         self.lbl_sayac.pack(side="left", padx=4)
 
@@ -3461,6 +3466,9 @@ class GecmisSezonPenceresi(tk.Toplevel):
                 self.tree.heading(cid, text=ctitle)
                 self.tree.column(cid, width=_scaled(cw), minwidth=_scaled(40))
             rows = self._okuyucu.sporcular_listele(sezon)
+            arama = self.v_sporcu_arama.get().strip().casefold()
+            if arama:
+                rows = [r for r in rows if arama in r["ad_soyad"].casefold()]
             self.tree.delete(*self.tree.get_children())
             for i, r in enumerate(rows):
                 tag = "even" if i % 2 == 0 else "odd"
