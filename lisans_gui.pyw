@@ -1467,6 +1467,160 @@ def _yas_kategorisi_hesapla(dogum_tarihi: str) -> str:
         return "—"
 
 
+class HibSekme(ttk.Frame):
+    """Herkes İçin Bisiklet sporcularının kayıt ve yönetim ekranı."""
+
+    def __init__(self, parent):
+        super().__init__(parent, style="TFrame")
+        self._secili_id = None
+        self._build()
+        self._listele()
+
+    def _build(self):
+        ttk.Label(self, text="HİB - HERKES İÇİN BİSİKLET",
+                  style="Header.TLabel").pack(fill="x")
+
+        pane = ttk.PanedWindow(self, orient="horizontal")
+        pane.pack(fill="both", expand=True, padx=8, pady=8)
+
+        form = ttk.LabelFrame(pane, text="HİB Sporcu Bilgileri", padding=8)
+        pane.add(form, weight=1)
+        self.v_ad = _lbl_entry(form, "Ad *", 0)
+        self.v_soyad = _lbl_entry(form, "Soyad *", 1)
+        self.v_dogum = _lbl_entry(form, "Doğum Tarihi *", 2, width=14)
+        ttk.Label(form, text="(YYYY-AA-GG)", font=FONT_S, foreground="gray").grid(
+            row=2, column=2, sticky="w")
+        self.v_kimlik = _lbl_entry(form, "Kimlik No *", 3)
+        self.v_cinsiyet = _lbl_combo(
+            form, "Cinsiyet", ["Belirtilmedi", "Erkek", "Kadın"], 4, width=14)
+        self.v_cinsiyet.set("Belirtilmedi")
+
+        ttk.Label(form, text="Yaş Kategorisi").grid(
+            row=5, column=0, sticky="e", padx=(8, 4), pady=4)
+        self.v_yas_kategori = tk.StringVar(value="—")
+        ttk.Label(form, textvariable=self.v_yas_kategori, font=FONT_B).grid(
+            row=5, column=1, sticky="w", padx=(0, 8), pady=4)
+
+        ttk.Label(form, text="Yarış Kategorisi").grid(
+            row=6, column=0, sticky="e", padx=(8, 4), pady=4)
+        self.v_yaris_kategori = tk.StringVar(value="—")
+        ttk.Label(form, textvariable=self.v_yaris_kategori, font=FONT_B).grid(
+            row=6, column=1, sticky="w", padx=(0, 8), pady=4)
+
+        self.v_dogum.trace_add("write", self._kategori_guncelle)
+        form.columnconfigure(1, weight=1)
+        buttons = ttk.Frame(form)
+        buttons.grid(row=7, column=0, columnspan=2, pady=(12, 4))
+        ttk.Button(buttons, text="➕ Kaydet", style="Add.TButton",
+                   command=self._kaydet).pack(side="left", padx=4)
+        ttk.Button(buttons, text="✏️ Güncelle", style="Upd.TButton",
+                   command=self._guncelle).pack(side="left", padx=4)
+        ttk.Button(buttons, text="🗑 Sil", style="Del.TButton",
+                   command=self._sil).pack(side="left", padx=4)
+        ttk.Button(buttons, text="✖ Temizle", style="Neu.TButton",
+                   command=self._temizle).pack(side="left", padx=4)
+
+        liste = ttk.LabelFrame(pane, text="HİB Sporcu Listesi", padding=4)
+        pane.add(liste, weight=2)
+        cols = [("id", "ID", 42), ("ad", "Ad", 120), ("soyad", "Soyad", 130),
+            ("cinsiyet", "Cinsiyet", 85), ("dogum", "Doğum Tarihi", 105),
+            ("kimlik", "Kimlik No", 120),
+                ("yas", "Yaş Kategorisi", 115), ("yaris", "Yarış Kategorisi", 115),
+                ("lisans", "Lisans No", 120)]
+        frame, self.tree = _make_tree(liste, cols)
+        frame.pack(fill="both", expand=True)
+        self.tree.bind("<<TreeviewSelect>>", self._on_sec)
+
+    def _kategori_guncelle(self, *_):
+        kategori = db.hib_kategori_hesapla(self.v_dogum.get().strip())
+        self.v_yas_kategori.set(kategori)
+        self.v_yaris_kategori.set(kategori)
+
+    def _listele(self):
+        rows = []
+        for row in db.hib_sporcular_listele():
+            kategori = db.hib_kategori_hesapla(row["dogum_tarihi"])
+            rows.append((row["id"], row["ad"], row["soyad"], row["cinsiyet"],
+                         row["dogum_tarihi"], row["kimlik_no"], kategori, kategori,
+                         row["lisans_no"] or "—"))
+        _fill_tree(self.tree, rows)
+
+    def _form_gecerli_mi(self) -> bool:
+        if not all((self.v_ad.get().strip(), self.v_soyad.get().strip(),
+                    self.v_dogum.get().strip(), self.v_kimlik.get().strip())):
+            messagebox.showwarning("Uyarı", "Ad, soyad, doğum tarihi ve kimlik no zorunludur.")
+            return False
+        if self.v_yas_kategori.get() in ("—", "Kategori Dışı"):
+            messagebox.showwarning(
+                "Uyarı", "HİB kaydı için geçerli bir doğum tarihi ve en az 25 yaş gereklidir.")
+            return False
+        return True
+
+    def _kaydet(self):
+        if not self._form_gecerli_mi():
+            return
+        try:
+            db.hib_sporcu_ekle(self.v_ad.get().strip(), self.v_soyad.get().strip(),
+                                self.v_dogum.get().strip(), self.v_kimlik.get().strip(),
+                                self.v_cinsiyet.get())
+            self._temizle()
+            self._listele()
+            messagebox.showinfo("Başarılı", "HİB sporcusu kaydedildi.")
+        except Exception as exc:
+            messagebox.showerror("Hata", str(exc))
+
+    def _guncelle(self):
+        if not self._secili_id:
+            messagebox.showwarning("Uyarı", "Listeden bir HİB sporcusu seçin.")
+            return
+        if not self._form_gecerli_mi():
+            return
+        try:
+            db.sporcu_guncelle(
+                self._secili_id, ad=self.v_ad.get().strip(), soyad=self.v_soyad.get().strip(),
+                dogum_tarihi=self.v_dogum.get().strip(), kimlik_no=self.v_kimlik.get().strip(),
+                cinsiyet=self.v_cinsiyet.get(), hib_sporcusu=1,
+            )
+            self._listele()
+            messagebox.showinfo("Başarılı", "HİB sporcusu güncellendi.")
+        except Exception as exc:
+            messagebox.showerror("Hata", str(exc))
+
+    def _sil(self):
+        if not self._secili_id:
+            messagebox.showwarning("Uyarı", "Listeden bir HİB sporcusu seçin.")
+            return
+        if not messagebox.askyesno("Onay", "Seçili HİB sporcusu silinsin mi?"):
+            return
+        try:
+            db.hib_sporcu_sil(self._secili_id)
+            self._temizle()
+            self._listele()
+            messagebox.showinfo("Başarılı", "HİB sporcusu silindi.")
+        except Exception as exc:
+            messagebox.showerror("Hata", str(exc))
+
+    def _on_sec(self, _=None):
+        secim = self.tree.selection()
+        if not secim:
+            return
+        self._secili_id = int(secim[0])
+        row = db.sporcu_getir(self._secili_id)
+        if row:
+            self.v_ad.set(row["ad"] or "")
+            self.v_soyad.set(row["soyad"] or "")
+            self.v_dogum.set(row["dogum_tarihi"] or "")
+            self.v_kimlik.set(row["kimlik_no"] or "")
+            self.v_cinsiyet.set(row["cinsiyet"] or "Belirtilmedi")
+
+    def _temizle(self):
+        self._secili_id = None
+        for value in (self.v_ad, self.v_soyad, self.v_dogum, self.v_kimlik):
+            value.set("")
+        self.v_cinsiyet.set("Belirtilmedi")
+        self.tree.selection_remove(*self.tree.selection())
+
+
 class YarisKayitSekme(ttk.Frame):
     def __init__(self, parent):
         super().__init__(parent, style="TFrame")
@@ -1631,10 +1785,12 @@ class YarisKayitSekme(ttk.Frame):
         for r in rows:
             if r["sporcu_id"] in kayitli:
                 continue
-            yas_kat = _yas_kategorisi_hesapla(r["dogum_tarihi"])
+            hib_sporcusu = bool(r["hib_sporcusu"])
+            yas_kat = db.hib_kategori_hesapla(r["dogum_tarihi"]) if hib_sporcusu else _yas_kategorisi_hesapla(r["dogum_tarihi"])
             ch = _cinsiyet_harf(r["cinsiyet"])
-            label = f"{r['ad_soyad']} | {yas_kat}({ch}) | {r['lisans_no']} | {r['kulup_adi']}"
-            self._sporcu_map[label] = (r["sporcu_id"], r["lisans_id"], r["dogum_tarihi"], r["cinsiyet"])
+            gorunen_kategori = f"HİB | {yas_kat}" if hib_sporcusu else yas_kat
+            label = f"{r['ad_soyad']} | {gorunen_kategori}({ch}) | {r['lisans_no']} | {r['kulup_adi']}"
+            self._sporcu_map[label] = (r["sporcu_id"], r["lisans_id"], r["dogum_tarihi"], r["cinsiyet"], hib_sporcusu)
         self._sporcu_ara_filtrele()
         self._kategori_goruntule()
 
@@ -1659,7 +1815,7 @@ class YarisKayitSekme(ttk.Frame):
         if not info or len(info) < 3:
             self.v_kat_otomatik.set("—")
             return
-        kat = _yas_kategorisi_hesapla(info[2])
+        kat = db.hib_kategori_hesapla(info[2]) if info[4] else _yas_kategorisi_hesapla(info[2])
         ch = _cinsiyet_harf(info[3])
         self.v_kat_otomatik.set(f"{kat} ({ch})" if kat not in ("—", "KD") else "—")
 
@@ -1674,8 +1830,9 @@ class YarisKayitSekme(ttk.Frame):
         for i, r in enumerate(rows):
             tag = "even" if i % 2 == 0 else "odd"
             ch = _cinsiyet_harf(r["cinsiyet"])
-            kat = r["kategori"]
-            kategori = f"{kat} ({ch})" if kat not in ("—", "") else "—"
+            kat = (db.hib_kategori_hesapla(r["dogum_tarihi"])
+                   if r["hib_sporcusu"] else r["kategori"])
+            kategori = kat if kat not in ("—", "") else "—"
             tree.insert("", "end", iid=str(r["id"]),
                         values=(r["id"], r["yaris_adi"], r["yaris_tarihi"],
                                 r["sporcu"], ch, r["lisans_no"],
@@ -1904,8 +2061,8 @@ class YarisKayitSekme(ttk.Frame):
                 "Kayıt için sadece 'Kayıt Açık' yarış seçilebilir ve sporcu seçimi zorunludur.",
             )
             return
-        sporcu_id, lisans_id, dogum_tarihi, _ = sporcu_info
-        kategori = _yas_kategorisi_hesapla(dogum_tarihi)
+        sporcu_id, lisans_id, dogum_tarihi, _, hib_sporcusu = sporcu_info
+        kategori = "HİB" if hib_sporcusu else _yas_kategorisi_hesapla(dogum_tarihi)
         if kategori in ("—", "KD"):
             kategori = None
         try:
@@ -2059,10 +2216,12 @@ class YarisKayitSekme(ttk.Frame):
             for r in rows:
                 if r["sporcu_id"] in kayitli:
                     continue
-                yas_kat = _yas_kategorisi_hesapla(r["dogum_tarihi"])
+                hib_sporcusu = bool(r["hib_sporcusu"])
+                yas_kat = db.hib_kategori_hesapla(r["dogum_tarihi"]) if hib_sporcusu else _yas_kategorisi_hesapla(r["dogum_tarihi"])
                 ch = _cinsiyet_harf(r["cinsiyet"])
-                label = f"{r['ad_soyad']} | {yas_kat}({ch}) | {r['lisans_no']} | {r['kulup_adi']}"
-                sporcu_map[label] = (r["sporcu_id"], r["lisans_id"], r["dogum_tarihi"], r["cinsiyet"])
+                gorunen_kategori = f"HİB | {yas_kat}" if hib_sporcusu else yas_kat
+                label = f"{r['ad_soyad']} | {gorunen_kategori}({ch}) | {r['lisans_no']} | {r['kulup_adi']}"
+                sporcu_map[label] = (r["sporcu_id"], r["lisans_id"], r["dogum_tarihi"], r["cinsiyet"], hib_sporcusu)
             _sporcu_ara_tum_liste = list(sporcu_map.keys())
             _sporcu_ara_filtrele()
             on_sporcu_sec()
@@ -2139,11 +2298,15 @@ class YarisKayitSekme(ttk.Frame):
                 lbl_yas_kat.config(text="—")
                 update_kat_display()
                 return
-            sporcu_id, _lid, dogum_tarihi, cinsiyet = info
-            yas_kat = hesapla_yas_kat(dogum_tarihi)
+            sporcu_id, _lid, dogum_tarihi, cinsiyet, hib_sporcusu = info
+            yas_kat = db.hib_kategori_hesapla(dogum_tarihi) if hib_sporcusu else hesapla_yas_kat(dogum_tarihi)
             ch = _cinsiyet_harf(cinsiyet)
             _st["yas_kat"] = yas_kat
             lbl_yas_kat.config(text=f"{yas_kat} ({ch})")
+            if hib_sporcusu:
+                _st["override_kat"] = None
+                update_kat_display()
+                return
             # Bu sezonda zaten kayıtlı kategorisi var mı?
             sezon = get_secili_sezon()
             ov = (
@@ -2164,8 +2327,9 @@ class YarisKayitSekme(ttk.Frame):
             for i, row in enumerate(rows):
                 tag = "even" if i % 2 == 0 else "odd"
                 ch = _cinsiyet_harf(row["cinsiyet"])
-                kat = row["kategori"]
-                kategori_goruntule = f"{kat} ({ch})" if kat not in ("—", "") else "—"
+                kat = (db.hib_kategori_hesapla(row["dogum_tarihi"])
+                       if row["hib_sporcusu"] else row["kategori"])
+                kategori_goruntule = kat if kat not in ("—", "") else "—"
                 vals = (
                     row["id"], row["sporcu"], ch,
                     row["lisans_no"], kategori_goruntule,
@@ -2193,8 +2357,8 @@ class YarisKayitSekme(ttk.Frame):
                     parent=win,
                 )
                 return
-            sporcu_id, lisans_id, _, _ = sporcu_info
-            kat = get_sporcu_yaris_kategorisi(sporcu_id)
+            sporcu_id, lisans_id, _, _, hib_sporcusu = sporcu_info
+            kat = "HİB" if hib_sporcusu else get_sporcu_yaris_kategorisi(sporcu_id)
             kategori = None if kat in ("—", "Kategori Dışı") else kat
             try:
                 db.yaris_kayit_ekle(
@@ -3416,10 +3580,12 @@ class App(tk.Tk):
 
         self.kulup_sekme  = KulupSekme(self.nb)
         self.sporcu_sekme = SporcuSekme(self.nb)
+        self.hib_sekme = HibSekme(self.nb)
         self.yaris_kayit_sekme = YarisKayitSekme(self.nb)
 
         self.nb.add(self.kulup_sekme,  text="  🏢 Kulüpler  ")
         self.nb.add(self.sporcu_sekme, text="  🚴 Sporcular  ")
+        self.nb.add(self.hib_sekme, text="  🚲 HİB  ")
         self.nb.add(self.yaris_kayit_sekme, text="  🏁 Yarış Kayıt  ")
 
     def _sekme_ac(self, index: int):
