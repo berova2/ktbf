@@ -69,6 +69,7 @@ CREATE TABLE IF NOT EXISTS sporcular (
     id                      INTEGER PRIMARY KEY AUTOINCREMENT,
     ad                      TEXT    NOT NULL,
     soyad                   TEXT    NOT NULL,
+    baba_adi                TEXT,
     kimlik_no               TEXT    NOT NULL UNIQUE,
     dogum_tarihi            TEXT,
     cinsiyet                TEXT    NOT NULL DEFAULT 'Belirtilmedi'
@@ -281,6 +282,8 @@ def init_db():
                 "ALTER TABLE sporcular ADD COLUMN hib_sporcusu INTEGER NOT NULL DEFAULT 0 "
                 "CHECK(hib_sporcusu IN (0,1))"
             )
+        if "baba_adi" not in cols:
+            conn.execute("ALTER TABLE sporcular ADD COLUMN baba_adi TEXT")
         kategori_kolonlari = {
             row["name"]
             for row in conn.execute(
@@ -383,6 +386,7 @@ def sporcular_dropdown() -> list:
 # ---------------------------------------------------------------------------
 
 def sporcu_ekle(ad: str, soyad: str, kimlik_no: str,
+                baba_adi: str = None,
                 dogum_tarihi: str = None, cinsiyet: str = "Belirtilmedi",
                 uyruk: str = "KKTC",
                 pasaport_no: str = None, telefon: str = None,
@@ -396,17 +400,17 @@ def sporcu_ekle(ad: str, soyad: str, kimlik_no: str,
     with get_conn() as conn:
         cur = conn.execute(
             """INSERT INTO sporcular
-                    (ad, soyad, kimlik_no, dogum_tarihi, cinsiyet, uyruk, pasaport_no,
-                        telefon, email, adres, spor_dairesi_kayitli, hib_sporcusu)
-                          VALUES (?,?,?,?,?,?,?,?,?,?,?,?)""",
-                (ad, soyad, kimlik_no, dogum_tarihi, cinsiyet, uyruk, pasaport_no,
-                      telefon, email, adres, spor_dairesi_kayitli, hib_sporcusu)
+                                        (ad, soyad, baba_adi, kimlik_no, dogum_tarihi, cinsiyet, uyruk,
+                                                pasaport_no, telefon, email, adres, spor_dairesi_kayitli, hib_sporcusu)
+                                                    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                                (ad, soyad, baba_adi, kimlik_no, dogum_tarihi, cinsiyet, uyruk,
+                                            pasaport_no, telefon, email, adres, spor_dairesi_kayitli, hib_sporcusu)
         )
         return cur.lastrowid
 
 
 def sporcu_guncelle(sporcu_id: int, **kwargs) -> None:
-    izin = {"ad","soyad","kimlik_no","dogum_tarihi","cinsiyet","uyruk","pasaport_no",
+    izin = {"ad","soyad","baba_adi","kimlik_no","dogum_tarihi","cinsiyet","uyruk","pasaport_no",
             "telefon","email","adres","spor_dairesi_kayitli","hib_sporcusu"}
     sutunlar = {k: v for k, v in kwargs.items() if k in izin}
     if not sutunlar:
@@ -965,7 +969,8 @@ def aktif_lisansli_sporcular() -> list:
                       s.hib_sporcusu,
                       l.id AS lisans_id,
                       l.lisans_no,
-                      COALESCE(k.ad, 'Ferdi') AS kulup_adi
+                      CASE WHEN s.hib_sporcusu=1 THEN 'HİB'
+                          ELSE COALESCE(k.ad, 'Ferdi') END AS kulup_adi
                FROM sporcular s
                JOIN lisanslar l ON l.id = (
                    SELECT id FROM lisanslar

@@ -522,67 +522,86 @@ class SporcuSekme(ttk.Frame):
         pane = ttk.PanedWindow(self, orient="horizontal")
         pane.pack(fill="both", expand=True, padx=8, pady=8)
 
-        # Sol: form
-        form_frame = ttk.LabelFrame(pane, text="Sporcu Bilgileri", padding=8)
-        pane.add(form_frame, weight=1)
+        # Sol: kaydırılabilir form
+        form_container = ttk.Frame(pane)
+        pane.add(form_container, weight=1)
+        form_canvas = tk.Canvas(form_container, background=BG, highlightthickness=0)
+        form_scrollbar = ttk.Scrollbar(
+            form_container, orient="vertical", command=form_canvas.yview
+        )
+        form_canvas.configure(yscrollcommand=form_scrollbar.set)
+        form_scrollbar.pack(side="right", fill="y")
+        form_canvas.pack(side="left", fill="both", expand=True)
+
+        form_frame = ttk.LabelFrame(form_canvas, text="Sporcu Bilgileri", padding=8)
+        form_window = form_canvas.create_window((0, 0), window=form_frame, anchor="nw")
+        form_frame.bind(
+            "<Configure>",
+            lambda _event: form_canvas.configure(scrollregion=form_canvas.bbox("all")),
+        )
+        form_canvas.bind(
+            "<Configure>",
+            lambda event: form_canvas.itemconfigure(form_window, width=event.width),
+        )
 
         self.v_ad       = _lbl_entry(form_frame, "Ad *",           0)
         self.v_soyad    = _lbl_entry(form_frame, "Soyad *",        1)
-        self.v_kimlik   = _lbl_entry(form_frame, "Kimlik No *",    2)
-        self.v_dogum    = _lbl_entry(form_frame, "Doğum Tarihi",   3, width=14)
+        self.v_baba_adi = _lbl_entry(form_frame, "Baba Adı",       2)
+        self.v_kimlik   = _lbl_entry(form_frame, "Kimlik No *",    3)
+        self.v_dogum    = _lbl_entry(form_frame, "Doğum Tarihi",   4, width=14)
         ttk.Label(form_frame, text="(YYYY-AA-GG)",
                   font=FONT_S, foreground="gray"
-                  ).grid(row=3, column=2, sticky="w")
+                  ).grid(row=4, column=2, sticky="w")
         self.v_cinsiyet = _lbl_combo(form_frame, "Cinsiyet",
-                         ["Belirtilmedi", "Erkek", "Kadın"], 4, width=14)
+                         ["Belirtilmedi", "Erkek", "Kadın"], 5, width=14)
         self.v_cinsiyet.set("Belirtilmedi")
         self.v_uyruk    = _lbl_combo(form_frame, "Uyruk",
-                         ["KKTC", "TC", "Diğer"], 5, width=10)
+                         ["KKTC", "TC", "Diğer"], 6, width=10)
         self.v_uyruk.set("KKTC")
-        self.v_pasaport = _lbl_entry(form_frame, "Pasaport No",    6)
-        self.v_tel      = _lbl_entry(form_frame, "Telefon",        7)
-        self.v_email    = _lbl_entry(form_frame, "E-posta",        8)
-        self.v_adres    = _lbl_entry(form_frame, "Adres",          9)
+        self.v_pasaport = _lbl_entry(form_frame, "Pasaport No",    7)
+        self.v_tel      = _lbl_entry(form_frame, "Telefon",        8)
+        self.v_email    = _lbl_entry(form_frame, "E-posta",        9)
+        self.v_adres    = _lbl_entry(form_frame, "Adres",          10)
         self.v_sd_kayit = _lbl_check(form_frame,
-                         "Spor Dairesi BYS Kayıtlı", 10)
+                         "Spor Dairesi BYS Kayıtlı", 11)
 
         # Kulüp seçimi — kayıtlı kulüpler veya Ferdi
         ttk.Label(form_frame, text="Kulüp").grid(
-            row=11, column=0, sticky="e", padx=(8, 4), pady=4)
+            row=12, column=0, sticky="e", padx=(8, 4), pady=4)
         self.v_kulup = tk.StringVar(value="— Ferdi —")
         self.cb_kulup = ttk.Combobox(form_frame, textvariable=self.v_kulup,
                                      width=14, state="readonly")
-        self.cb_kulup.grid(row=11, column=1,
+        self.cb_kulup.grid(row=12, column=1,
                            sticky="w", padx=(0, 8), pady=4)
 
         # Lisans türü
         self.v_lisans_turu = _lbl_combo(
             form_frame, "Lisans Türü",
             ["Ulusal", "Uluslararası", "Ferdi", "Geçici", "MisafirSporcu"],
-            12, width=14)
+            13, width=14)
         self.v_lisans_turu.set("Ulusal")
 
         # Sezon
-        self.v_sezon = _lbl_entry(form_frame, "Sezon", 13, width=10)
+        self.v_sezon = _lbl_entry(form_frame, "Sezon", 14, width=10)
         self.v_sezon.set("2026")
 
         # Üretilen lisans no (salt okunur, kayıt sonrası dolar)
         ttk.Label(form_frame, text="Lisans No").grid(
-            row=14, column=0, sticky="e", padx=(8, 4), pady=4)
+            row=15, column=0, sticky="e", padx=(8, 4), pady=4)
         self.v_lisans_no = tk.StringVar(value="—")
         ttk.Label(form_frame, textvariable=self.v_lisans_no,
                   foreground=ACCENT, font=FONT_B).grid(
-            row=14, column=1, sticky="w", padx=(0, 8), pady=4)
+            row=15, column=1, sticky="w", padx=(0, 8), pady=4)
 
         ttk.Label(form_frame, text="Yaş Kategorisi").grid(
-            row=15, column=0, sticky="e", padx=(8, 4), pady=4)
+            row=16, column=0, sticky="e", padx=(8, 4), pady=4)
         self.v_yas_kategorisi = tk.StringVar(value="—")
         ttk.Label(form_frame, textvariable=self.v_yas_kategorisi,
                   font=FONT_B).grid(
-            row=15, column=1, sticky="w", padx=(0, 8), pady=4)
+            row=16, column=1, sticky="w", padx=(0, 8), pady=4)
 
         ttk.Label(form_frame, text="Yarış Kategorisi").grid(
-            row=16, column=0, sticky="e", padx=(8, 4), pady=4)
+            row=17, column=0, sticky="e", padx=(8, 4), pady=4)
         self.v_yaris_kategorisi = tk.StringVar(value="—")
         self.cb_yaris_kategorisi = ttk.Combobox(
             form_frame,
@@ -592,12 +611,12 @@ class SporcuSekme(ttk.Frame):
             state="readonly",
         )
         self.cb_yaris_kategorisi.grid(
-            row=16, column=1, sticky="w", padx=(0, 8), pady=4)
+            row=17, column=1, sticky="w", padx=(0, 8), pady=4)
         self.cb_yaris_kategorisi.bind("<<ComboboxSelected>>",
                                        self._yaris_kategorisi_degisti)
 
         ttk.Label(form_frame, text="MTB Kategorisi").grid(
-            row=17, column=0, sticky="e", padx=(8, 4), pady=4)
+            row=18, column=0, sticky="e", padx=(8, 4), pady=4)
         self.v_mtb_kategorisi = tk.StringVar(value="—")
         self.cb_mtb_kategorisi = ttk.Combobox(
             form_frame,
@@ -607,7 +626,7 @@ class SporcuSekme(ttk.Frame):
             state="readonly",
         )
         self.cb_mtb_kategorisi.grid(
-            row=17, column=1, sticky="w", padx=(0, 8), pady=4)
+            row=18, column=1, sticky="w", padx=(0, 8), pady=4)
         self.cb_mtb_kategorisi.bind("<<ComboboxSelected>>",
                                      self._mtb_kategorisi_degisti)
 
@@ -650,10 +669,13 @@ class SporcuSekme(ttk.Frame):
 
         ttk.Separator(filtre_frame, orient="vertical").pack(side="left", fill="y", padx=6)
         self.v_grup_modu = tk.BooleanVar(value=False)
-        self.btn_grup = ttk.Checkbutton(filtre_frame, text="📂 Grupla",
+        self.btn_grup = ttk.Checkbutton(filtre_frame, text="📂 Kulübe Göre Grupla",
                                         variable=self.v_grup_modu,
                                         command=self._grup_modu_degisti)
         self.btn_grup.pack(side="left", padx=4)
+        self.v_sporcu_sayisi = tk.StringVar(value="Toplam: 0 sporcu")
+        ttk.Label(filtre_frame, textvariable=self.v_sporcu_sayisi,
+              font=FONT_B).pack(side="left", padx=(8, 4))
         ttk.Button(filtre_frame, text="🔄 Filtreyi Temizle", command=self._filtre_temizle
                    ).pack(side="left", padx=4)
         ttk.Button(filtre_frame, text="📊 Excel Oluştur", style="Neu.TButton",
@@ -669,6 +691,9 @@ class SporcuSekme(ttk.Frame):
             ("lisans_no","Lisans No",88), ("kulup_adi","Kulüp",130),
             ("spor_dairesi_kayitli","BYS",38)]
         tf, self.tree = _make_tree(list_frame, cols)
+        self.tree.configure(
+            displaycolumns=[column_id for column_id, *_ in cols if column_id != "id"]
+        )
         tf.pack(fill="both", expand=True)
         self.tree.bind("<<TreeviewSelect>>", self._on_sec)
 
@@ -862,7 +887,8 @@ class SporcuSekme(ttk.Frame):
                ) AS mtb_kategorisi,
                s.uyruk, s.telefon,
                COALESCE(l.lisans_no, '—')  AS lisans_no,
-               COALESCE(k.ad, 'Ferdi')     AS kulup_adi,
+            CASE WHEN s.hib_sporcusu=1 THEN 'HİB'
+                ELSE COALESCE(k.ad, 'Ferdi') END AS kulup_adi,
                s.spor_dairesi_kayitli
         FROM sporcular s
         LEFT JOIN lisanslar l ON l.id = (
@@ -900,7 +926,10 @@ class SporcuSekme(ttk.Frame):
 
         kulup = self.v_kulup_filtre.get().strip()
         if kulup and kulup != "Tümü":
-            kosullar.append("COALESCE(k.ad, 'Ferdi') = ?")
+            kosullar.append(
+                "CASE WHEN s.hib_sporcusu=1 THEN 'HİB' "
+                "ELSE COALESCE(k.ad, 'Ferdi') END = ?"
+            )
             params.append(kulup)
 
         where = ""
@@ -914,6 +943,7 @@ class SporcuSekme(ttk.Frame):
         with db.get_conn() as conn:
             rows = conn.execute(sql, params).fetchall()
 
+        self.v_sporcu_sayisi.set(f"Toplam: {len(rows)} sporcu")
         if self._grup_modu:
             self._listele_gruplu(rows)
         else:
@@ -935,41 +965,33 @@ class SporcuSekme(ttk.Frame):
         with db.get_conn() as conn:
             rows = conn.execute(sql, params).fetchall()
 
+        self.v_sporcu_sayisi.set(f"Toplam: {len(rows)} sporcu")
         if self._grup_modu:
             self._listele_gruplu(rows)
         else:
             _fill_tree(self.tree, rows)
 
     def _listele_gruplu(self, rows):
-        """Sporcu listesini kategori ve kulübe göre gruplandırarak gösterir."""
+        """Sporcu listesini kulübe göre gruplandırarak gösterir."""
         self.tree.delete(*self.tree.get_children())
 
-        # rows'u (yas_kategorisi, kulup_adi) ikilisine göre grupla
+        # Satırları yalnızca kulüp adına göre grupla.
         from collections import OrderedDict
-        gruplar: dict[tuple[str, str], list] = OrderedDict()
+        gruplar: dict[str, list] = OrderedDict()
         for r in rows:
-            kat = r["yas_kategorisi"] if r["yas_kategorisi"] not in ("—", "") else "Belirsiz"
             kulup = r["kulup_adi"] if r["kulup_adi"] not in ("—", "") else "Ferdi"
-            anahtar = (kat, kulup)
-            if anahtar not in gruplar:
-                gruplar[anahtar] = []
-            gruplar[anahtar].append(r)
+            if kulup not in gruplar:
+                gruplar[kulup] = []
+            gruplar[kulup].append(r)
 
-        # Kategori sıralaması
-        KAT_SIRA = {k: i for i, k in enumerate(self._FILTRE_KATEGORILER)}
-
-        def sira_anahtar(g):
-            (kat, kulup), _ = g
-            return (KAT_SIRA.get(kat, 99), kulup)
-
-        sirali = sorted(gruplar.items(), key=sira_anahtar)
+        sirali = sorted(gruplar.items())
 
         iid_counter = [0]
-        for (kat, kulup), elemanlar in sirali:
+        for kulup, elemanlar in sirali:
             iid_counter[0] += 1
             grup_id = f"grup_{iid_counter[0]}"
-            etiket = f"  📁 {kat} — {kulup}  ({len(elemanlar)} sporcu)"
-            self.tree.insert("", "end", iid=grup_id, values=[etiket, "", "", "", "", "", "", "", "", "", "", "", "", ""],
+            etiket = f"  📁 {kulup}  ({len(elemanlar)} sporcu)"
+            self.tree.insert("", "end", iid=grup_id, values=["", etiket, "", "", "", "", "", "", "", "", "", "", "", ""],
                              tags=("group",))
 
             for i, row in enumerate(elemanlar):
@@ -1095,6 +1117,7 @@ class SporcuSekme(ttk.Frame):
         if row:
             self.v_ad.set(row["ad"] or "")
             self.v_soyad.set(row["soyad"] or "")
+            self.v_baba_adi.set(row["baba_adi"] or "")
             self.v_kimlik.set(row["kimlik_no"] or "")
             self.v_dogum.set(row["dogum_tarihi"] or "")
             self.v_cinsiyet.set(row["cinsiyet"] or "Belirtilmedi")
@@ -1147,6 +1170,7 @@ class SporcuSekme(ttk.Frame):
                 self.v_ad.get().strip(),
                 self.v_soyad.get().strip(),
                 self.v_kimlik.get().strip(),
+                baba_adi=self.v_baba_adi.get().strip() or None,
                 dogum_tarihi=self.v_dogum.get() or None,
                 cinsiyet=self.v_cinsiyet.get() or "Belirtilmedi",
                 uyruk=self.v_uyruk.get() or "KKTC",
@@ -1193,6 +1217,7 @@ class SporcuSekme(ttk.Frame):
                 self._secili_id,
                 ad=self.v_ad.get().strip(),
                 soyad=self.v_soyad.get().strip(),
+                baba_adi=self.v_baba_adi.get().strip() or None,
                 kimlik_no=self.v_kimlik.get().strip(),
                 dogum_tarihi=self.v_dogum.get() or None,
                 cinsiyet=self.v_cinsiyet.get() or "Belirtilmedi",
@@ -1234,7 +1259,7 @@ class SporcuSekme(ttk.Frame):
 
     # ------------------------------------------------------------------
     def _temizle(self):
-        for v in (self.v_ad, self.v_soyad, self.v_kimlik, self.v_dogum,
+        for v in (self.v_ad, self.v_soyad, self.v_baba_adi, self.v_kimlik, self.v_dogum,
                   self.v_pasaport, self.v_tel, self.v_email, self.v_adres):
             v.set("")
         self.v_cinsiyet.set("Belirtilmedi")
