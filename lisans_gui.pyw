@@ -1759,6 +1759,9 @@ class YarisKayitSekme(ttk.Frame):
                    command=self._kayit_sil).pack(side="left", padx=4)
         ttk.Button(b2, text=" Sporcuları Yenile", style="Neu.TButton",
                    command=self._sporculari_yukle).pack(side="left", padx=4)
+        self.v_kayit_sayisi = tk.StringVar(value="Toplam: 0 kayıt")
+        ttk.Label(b2, textvariable=self.v_kayit_sayisi,
+                  font=FONT_B).pack(side="right", padx=4)
 
         cols_kayit = [
             ("id", "ID", 42),
@@ -1851,6 +1854,8 @@ class YarisKayitSekme(ttk.Frame):
 
         tree = self.tree_kayit
         tree.delete(*tree.get_children())
+
+        self.v_kayit_sayisi.set(f"Toplam: {len(rows)} kayıt")
 
         for i, r in enumerate(rows):
             tag = "even" if i % 2 == 0 else "odd"
