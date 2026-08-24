@@ -456,11 +456,10 @@ class KulupSekme(ttk.Frame):
 # ---------------------------------------------------------------------------
 
 class SporcuSekme(ttk.Frame):
-    _TUM_KATEGORILER = ["U13", "U15", "U17", "U19", "Elite",
-                        "Master A", "Master B", "Master C"]
+    # Ulusal lisans kategorileri – tek kaynak: lisans_db.ULUSAL_KATEGORILER
+    _TUM_KATEGORILER = db.ULUSAL_KATEGORILER
 
-    _FILTRE_KATEGORILER = ["Tümü", "U13", "U15", "U17", "U19", "Elite",
-                          "Master A", "Master B", "Master C", "Kategori Dışı"]
+    _FILTRE_KATEGORILER = ["Tümü", *db.ULUSAL_KATEGORILER, "Kategori Dışı"]
 
     def __init__(self, parent):
         super().__init__(parent, style="TFrame")
@@ -708,29 +707,8 @@ class SporcuSekme(ttk.Frame):
 
     @staticmethod
     def _hesapla_yas_kategorisi(dogum_tarihi: str) -> str:
-        if not dogum_tarihi:
-            return "—"
-        try:
-            yas = date.today().year - int(dogum_tarihi[:4])
-        except Exception:
-            return "—"
-        if 11 <= yas <= 12:
-            return "U13"
-        if 13 <= yas <= 14:
-            return "U15"
-        if 15 <= yas <= 16:
-            return "U17"
-        if 17 <= yas <= 18:
-            return "U19"
-        if 19 <= yas <= 34:
-            return "Elite"
-        if 35 <= yas <= 39:
-            return "Master A"
-        if 40 <= yas <= 44:
-            return "Master B"
-        if yas >= 45:
-            return "Master C"
-        return "Kategori Dışı"
+        """Doğum tarihinden ulusal lisans yaş kategorisini hesaplar."""
+        return db.yas_kategorisi_hesapla(dogum_tarihi)
 
     def _kategori_gorunumu_guncelle(self):
         yas_kat = self._hesapla_yas_kategorisi(self.v_dogum.get().strip())
@@ -824,11 +802,11 @@ class SporcuSekme(ttk.Frame):
                    WHEN (CAST(strftime('%Y','now') AS INTEGER) - CAST(substr(s.dogum_tarihi,1,4) AS INTEGER)) BETWEEN 11 AND 12
                        THEN 'U13'
                    WHEN (CAST(strftime('%Y','now') AS INTEGER) - CAST(substr(s.dogum_tarihi,1,4) AS INTEGER)) BETWEEN 13 AND 14
-                       THEN 'Yıldız B / U15'
+                       THEN 'U15'
                    WHEN (CAST(strftime('%Y','now') AS INTEGER) - CAST(substr(s.dogum_tarihi,1,4) AS INTEGER)) BETWEEN 15 AND 16
-                       THEN 'Yıldız A / U17'
+                       THEN 'U17'
                    WHEN (CAST(strftime('%Y','now') AS INTEGER) - CAST(substr(s.dogum_tarihi,1,4) AS INTEGER)) BETWEEN 17 AND 18
-                       THEN 'Genç / U19'
+                       THEN 'U19'
                    WHEN (CAST(strftime('%Y','now') AS INTEGER) - CAST(substr(s.dogum_tarihi,1,4) AS INTEGER)) BETWEEN 19 AND 34
                        THEN 'Elite'
                    WHEN (CAST(strftime('%Y','now') AS INTEGER) - CAST(substr(s.dogum_tarihi,1,4) AS INTEGER)) BETWEEN 35 AND 39
@@ -888,7 +866,8 @@ class SporcuSekme(ttk.Frame):
                s.uyruk, s.telefon,
                COALESCE(l.lisans_no, '—')  AS lisans_no,
             CASE WHEN s.hib_sporcusu=1 THEN 'HİB'
-                ELSE COALESCE(k.ad, 'Ferdi') END AS kulup_adi,
+                 WHEN s.misafir_sporcu=1 THEN 'Misafir'
+                 ELSE COALESCE(k.ad, 'Ferdi') END AS kulup_adi,
                s.spor_dairesi_kayitli
         FROM sporcular s
         LEFT JOIN lisanslar l ON l.id = (
@@ -903,7 +882,8 @@ class SporcuSekme(ttk.Frame):
 
     def _filtre_kosulu(self) -> tuple[str, list]:
         """Seçili filtrelere göre WHERE koşulu ve parametre listesi üretir."""
-        kosullar = []
+        # UCI lisanslı misafir sporcular kendi sekmelerinde yönetilir.
+        kosullar = ["s.misafir_sporcu=0"]
         params = []
 
         kat = self.v_kat_filtre.get().strip()
@@ -1474,22 +1454,8 @@ def _cinsiyet_harf(cinsiyet: str) -> str:
 
 
 def _yas_kategorisi_hesapla(dogum_tarihi: str) -> str:
-    """Doğum tarihinden yaş kategorisini hesaplar."""
-    if not dogum_tarihi:
-        return "—"
-    try:
-        yas = date.today().year - int(dogum_tarihi[:4])
-        if 11 <= yas <= 12:  return "U13"
-        if 13 <= yas <= 14:  return "U15"
-        if 15 <= yas <= 16:  return "U17"
-        if 17 <= yas <= 18:  return "U19"
-        if 19 <= yas <= 34:  return "Elite"
-        if 35 <= yas <= 39:  return "Master A"
-        if 40 <= yas <= 44:  return "Master B"
-        if yas >= 45:        return "Master C"
-        return "KD"
-    except Exception:
-        return "—"
+    """Doğum tarihinden ulusal lisans yaş kategorisini hesaplar."""
+    return db.yas_kategorisi_hesapla(dogum_tarihi)
 
 
 class HibSekme(ttk.Frame):
@@ -1643,6 +1609,234 @@ class HibSekme(ttk.Frame):
         for value in (self.v_ad, self.v_soyad, self.v_dogum, self.v_kimlik):
             value.set("")
         self.v_cinsiyet.set("Belirtilmedi")
+        self.tree.selection_remove(*self.tree.selection())
+
+
+class MisafirSporcuSekme(ttk.Frame):
+    """UCI lisanslı misafir sporcu kayıt ve yönetim ekranı.
+
+    (Yabancı Uyruklu ve Misafir Sporcu Lisans, Tescil ve Yarışma Talimatı)
+    """
+
+    def __init__(self, parent):
+        super().__init__(parent, style="TFrame")
+        self._secili_id = None
+        self._build()
+        self._listele()
+
+    def _build(self):
+        ttk.Label(self, text="MİSAFİR SPORCU (UCI LİSANSLI)",
+                  style="Header.TLabel").pack(fill="x")
+
+        pane = ttk.PanedWindow(self, orient="horizontal")
+        pane.pack(fill="both", expand=True, padx=8, pady=8)
+
+        form = ttk.LabelFrame(pane, text="Misafir Sporcu Bilgileri (UCI)", padding=8)
+        pane.add(form, weight=1)
+
+        self.v_ad       = _lbl_entry(form, "Ad *",            0)
+        self.v_soyad    = _lbl_entry(form, "Soyad *",         1)
+        self.v_uci      = _lbl_entry(form, "UCI Lisans No *", 2)
+        self.v_uyruk    = _lbl_entry(form, "Uyruk (Ülke)",    3)
+        ttk.Label(form, text="(örn. TC, Yunanistan, ...)",
+                  font=FONT_S, foreground="gray").grid(row=3, column=2, sticky="w")
+        self.v_fed      = _lbl_entry(form, "UCI Federasyon Kodu", 4)
+        self.v_takim    = _lbl_entry(form, "UCI Takım",       5)
+        self.v_dogum    = _lbl_entry(form, "Doğum Tarihi",    6, width=14)
+        ttk.Label(form, text="(YYYY-AA-GG)",
+                  font=FONT_S, foreground="gray").grid(row=6, column=2, sticky="w")
+        self.v_cinsiyet = _lbl_combo(form, "Cinsiyet",
+                         ["Belirtilmedi", "Erkek", "Kadın"], 7, width=14)
+        self.v_cinsiyet.set("Belirtilmedi")
+        self.v_pasaport = _lbl_entry(form, "Pasaport No",     8)
+        self.v_tel      = _lbl_entry(form, "Telefon",         9)
+        self.v_email    = _lbl_entry(form, "E-posta",         10)
+        self.v_adres    = _lbl_entry(form, "Adres",           11)
+        self.v_bitis    = _lbl_entry(form, "UCI Lisans Bitiş", 12, width=14)
+        ttk.Label(form, text="(YYYY-AA-GG)",
+                  font=FONT_S, foreground="gray").grid(row=12, column=2, sticky="w")
+        self.v_sezon    = _lbl_entry(form, "Sezon",           13, width=10)
+        self.v_sezon.set("2026")
+
+        ttk.Label(form, text="Yaş Kategorisi").grid(
+            row=14, column=0, sticky="e", padx=(8, 4), pady=4)
+        self.v_yas_kategori = tk.StringVar(value="—")
+        ttk.Label(form, textvariable=self.v_yas_kategori, font=FONT_B).grid(
+            row=14, column=1, sticky="w", padx=(0, 8), pady=4)
+
+        self.v_dogum.trace_add("write", self._kategori_guncelle)
+        form.columnconfigure(1, weight=1)
+
+        buttons = ttk.Frame(form)
+        buttons.grid(row=15, column=0, columnspan=2, pady=(12, 4))
+        ttk.Button(buttons, text="➕ Kaydet", style="Add.TButton",
+                   command=self._kaydet).pack(side="left", padx=4)
+        ttk.Button(buttons, text="✏️ Güncelle", style="Upd.TButton",
+                   command=self._guncelle).pack(side="left", padx=4)
+        ttk.Button(buttons, text="🗑 Sil", style="Del.TButton",
+                   command=self._sil).pack(side="left", padx=4)
+        ttk.Button(buttons, text="✖ Temizle", style="Neu.TButton",
+                   command=self._temizle).pack(side="left", padx=4)
+
+        liste = ttk.LabelFrame(pane, text="Misafir Sporcu Listesi", padding=4)
+        pane.add(liste, weight=2)
+        cols = [
+            ("id",       "ID",            42),
+            ("ad",       "Ad",           110),
+            ("soyad",    "Soyad",        110),
+            ("cinsiyet", "Cinsiyet",      80),
+            ("dogum",    "Doğum Tarihi", 100),
+            ("uci",      "UCI Lisans No", 140),
+            ("fed",      "UCI Fed.",      90),
+            ("takim",    "UCI Takım",    140),
+            ("yas",      "Kategori",     110),
+            ("bitis",    "Lisans Bitiş", 100),
+        ]
+        frame, self.tree = _make_tree(liste, cols)
+        frame.pack(fill="both", expand=True)
+        self.tree.bind("<<TreeviewSelect>>", self._on_sec)
+
+    def _kategori_guncelle(self, *_):
+        self.v_yas_kategori.set(_yas_kategorisi_hesapla(self.v_dogum.get().strip()))
+
+    def _listele(self):
+        rows = []
+        for row in db.misafir_sporcular_listele():
+            kat = _yas_kategorisi_hesapla(row["dogum_tarihi"])
+            rows.append((
+                row["id"],
+                row["ad"],
+                row["soyad"],
+                row["cinsiyet"],
+                row["dogum_tarihi"] or "—",
+                row["uci_lisans_no"] or "—",
+                row["yabanci_federasyon"] or "—",
+                row["uci_takim"] or "—",
+                kat,
+                row["gecerlilik_bitis"] or "—",
+            ))
+        _fill_tree(self.tree, rows)
+
+    def _form_gecerli_mi(self) -> bool:
+        if not all((self.v_ad.get().strip(), self.v_soyad.get().strip(),
+                    self.v_uci.get().strip())):
+            messagebox.showwarning(
+                "Uyarı", "Ad, soyad ve UCI lisans numarası zorunludur.")
+            return False
+        return True
+
+    def _kaydet(self):
+        if not self._form_gecerli_mi():
+            return
+        try:
+            db.misafir_sporcu_ekle(
+                self.v_ad.get().strip(),
+                self.v_soyad.get().strip(),
+                self.v_uci.get().strip(),
+                uyruk=self.v_uyruk.get().strip() or "Diğer",
+                yabanci_federasyon=self.v_fed.get().strip() or None,
+                uci_takim=self.v_takim.get().strip() or None,
+                dogum_tarihi=self.v_dogum.get().strip() or None,
+                cinsiyet=self.v_cinsiyet.get(),
+                pasaport_no=self.v_pasaport.get().strip() or None,
+                telefon=self.v_tel.get().strip() or None,
+                email=self.v_email.get().strip() or None,
+                adres=self.v_adres.get().strip() or None,
+                gecerlilik_bitis=self.v_bitis.get().strip() or None,
+                sezon=self.v_sezon.get().strip() or None,
+            )
+            self._temizle()
+            self._listele()
+            messagebox.showinfo("Başarılı", "Misafir sporcu kaydedildi.")
+        except Exception as exc:
+            messagebox.showerror("Hata", str(exc))
+
+    def _guncelle(self):
+        if not self._secili_id:
+            messagebox.showwarning("Uyarı", "Listeden bir misafir sporcu seçin.")
+            return
+        if not self._form_gecerli_mi():
+            return
+        try:
+            db.misafir_sporcu_guncelle(
+                self._secili_id,
+                ad=self.v_ad.get().strip(),
+                soyad=self.v_soyad.get().strip(),
+                uci_lisans_no=self.v_uci.get().strip(),
+                uyruk=self.v_uyruk.get().strip() or "Diğer",
+                yabanci_federasyon=self.v_fed.get().strip() or None,
+                uci_takim=self.v_takim.get().strip() or None,
+                dogum_tarihi=self.v_dogum.get().strip() or None,
+                cinsiyet=self.v_cinsiyet.get(),
+                pasaport_no=self.v_pasaport.get().strip() or None,
+                telefon=self.v_tel.get().strip() or None,
+                email=self.v_email.get().strip() or None,
+                adres=self.v_adres.get().strip() or None,
+                gecerlilik_bitis=self.v_bitis.get().strip() or None,
+                sezon=self.v_sezon.get().strip() or None,
+            )
+            self._listele()
+            messagebox.showinfo("Başarılı", "Misafir sporcu güncellendi.")
+        except Exception as exc:
+            messagebox.showerror("Hata", str(exc))
+
+    def _sil(self):
+        if not self._secili_id:
+            messagebox.showwarning("Uyarı", "Listeden bir misafir sporcu seçin.")
+            return
+        if not messagebox.askyesno("Onay", "Seçili misafir sporcu silinsin mi?"):
+            return
+        try:
+            db.misafir_sporcu_sil(self._secili_id)
+            self._temizle()
+            self._listele()
+            messagebox.showinfo("Başarılı", "Misafir sporcu silindi.")
+        except Exception as exc:
+            messagebox.showerror("Hata", str(exc))
+
+    def _on_sec(self, _=None):
+        secim = self.tree.selection()
+        if not secim:
+            return
+        self._secili_id = int(secim[0])
+        row = db.sporcu_getir(self._secili_id)
+        if not row:
+            return
+        self.v_ad.set(row["ad"] or "")
+        self.v_soyad.set(row["soyad"] or "")
+        self.v_uci.set(row["uci_lisans_no"] or "")
+        self.v_uyruk.set(row["uyruk"] or "Diğer")
+        self.v_fed.set(row["yabanci_federasyon"] or "")
+        self.v_takim.set(row["uci_takim"] or "")
+        self.v_dogum.set(row["dogum_tarihi"] or "")
+        self.v_cinsiyet.set(row["cinsiyet"] or "Belirtilmedi")
+        self.v_pasaport.set(row["pasaport_no"] or "")
+        self.v_tel.set(row["telefon"] or "")
+        self.v_email.set(row["email"] or "")
+        self.v_adres.set(row["adres"] or "")
+        self._kategori_guncelle()
+        # Aktif lisans bilgileri
+        with db.get_conn() as conn:
+            lis = conn.execute(
+                """SELECT sezon, gecerlilik_bitis FROM lisanslar
+                   WHERE sporcu_id=? AND durum='Aktif'
+                   ORDER BY id DESC LIMIT 1""",
+                (self._secili_id,),
+            ).fetchone()
+        if lis:
+            self.v_sezon.set(lis["sezon"] or "")
+            self.v_bitis.set(lis["gecerlilik_bitis"] or "")
+
+    def _temizle(self):
+        for v in (self.v_ad, self.v_soyad, self.v_uci, self.v_fed,
+                  self.v_takim, self.v_dogum, self.v_pasaport,
+                  self.v_tel, self.v_email, self.v_adres, self.v_bitis):
+            v.set("")
+        self.v_uyruk.set("Diğer")
+        self.v_cinsiyet.set("Belirtilmedi")
+        self.v_sezon.set("2026")
+        self.v_yas_kategori.set("—")
+        self._secili_id = None
         self.tree.selection_remove(*self.tree.selection())
 
 
@@ -1845,7 +2039,9 @@ class YarisKayitSekme(ttk.Frame):
             return
         kat = db.hib_kategori_hesapla(info[2]) if info[4] else _yas_kategorisi_hesapla(info[2])
         ch = _cinsiyet_harf(info[3])
-        self.v_kat_otomatik.set(f"{kat} ({ch})" if kat not in ("—", "KD") else "—")
+        self.v_kat_otomatik.set(
+            f"{kat} ({ch})" if kat not in ("—", "KD", "Kategori Dışı") else "—"
+        )
 
     def _kayitlari_listele(self):
         sec = self.v_kayit_yaris.get().strip()
@@ -2093,7 +2289,7 @@ class YarisKayitSekme(ttk.Frame):
             return
         sporcu_id, lisans_id, dogum_tarihi, _, hib_sporcusu = sporcu_info
         kategori = "HİB" if hib_sporcusu else _yas_kategorisi_hesapla(dogum_tarihi)
-        if kategori in ("—", "KD"):
+        if kategori in ("—", "KD", "Kategori Dışı"):
             kategori = None
         try:
             db.yaris_kayit_ekle(
@@ -2136,30 +2332,8 @@ class YarisKayitSekme(ttk.Frame):
         self._kayit_penceresi_ac(yaris_id=int(sel[0]))
 
     def _kayit_penceresi_ac(self, yaris_id: int | None = None):  # noqa: C901
-        import datetime
-
-        # ── Kategori sırası ve bir-alt haritası ──────────────────────────
-        KATEGORI_SIRA = [
-            "U13", "U15", "U17", "U19",
-            "Elite", "Master A", "Master B", "Master C",
-        ]
-
         def hesapla_yas_kat(dogum_tarihi):
-            if not dogum_tarihi:
-                return "—"
-            try:
-                yas = datetime.date.today().year - int(dogum_tarihi[:4])
-                if 11 <= yas <= 12:  return "U13"
-                if 13 <= yas <= 14:  return "U15"
-                if 15 <= yas <= 16:  return "U17"
-                if 17 <= yas <= 18:  return "U19"
-                if 19 <= yas <= 34:  return "Elite"
-                if 35 <= yas <= 39:  return "Master A"
-                if 40 <= yas <= 44:  return "Master B"
-                if yas >= 45:        return "Master C"
-                return "Kategori Dışı"
-            except Exception:
-                return "—"
+            return db.yas_kategorisi_hesapla(dogum_tarihi)
 
         # ── Pencere ───────────────────────────────────────────────────────
         win = tk.Toplevel(self)
@@ -3619,11 +3793,13 @@ class App(tk.Tk):
         self.kulup_sekme  = KulupSekme(self.nb)
         self.sporcu_sekme = SporcuSekme(self.nb)
         self.hib_sekme = HibSekme(self.nb)
+        self.misafir_sekme = MisafirSporcuSekme(self.nb)
         self.yaris_kayit_sekme = YarisKayitSekme(self.nb)
 
         self.nb.add(self.kulup_sekme,  text="  🏢 Kulüpler  ")
         self.nb.add(self.sporcu_sekme, text="  🚴 Sporcular  ")
         self.nb.add(self.hib_sekme, text="  🚲 HİB  ")
+        self.nb.add(self.misafir_sekme, text="  🌍 Misafir Sporcu (UCI)  ")
         self.nb.add(self.yaris_kayit_sekme, text="  🏁 Yarış Kayıt  ")
 
     def _sekme_ac(self, index: int):

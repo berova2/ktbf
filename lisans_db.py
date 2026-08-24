@@ -80,6 +80,12 @@ CREATE TABLE IF NOT EXISTS sporcular (
     email                   TEXT,
     adres                   TEXT,
     hib_sporcusu            INTEGER NOT NULL DEFAULT 0 CHECK(hib_sporcusu IN (0,1)),
+    -- UCI lisanslı misafir sporcu
+    -- (Yabancı Uyruklu ve Misafir Sporcu Lisans, Tescil ve Yarışma Talimatı)
+    misafir_sporcu          INTEGER NOT NULL DEFAULT 0 CHECK(misafir_sporcu IN (0,1)),
+    uci_lisans_no           TEXT,
+    yabanci_federasyon      TEXT,
+    uci_takim               TEXT,
     -- Madde 7A: Spor Dairesi Bilgi Yönetim Sistemi kaydı zorunludur
     spor_dairesi_kayitli    INTEGER NOT NULL DEFAULT 0 CHECK(spor_dairesi_kayitli IN (0,1)),
     kayit_tarihi            TEXT    NOT NULL DEFAULT (date('now'))
@@ -282,6 +288,17 @@ def init_db():
                 "ALTER TABLE sporcular ADD COLUMN hib_sporcusu INTEGER NOT NULL DEFAULT 0 "
                 "CHECK(hib_sporcusu IN (0,1))"
             )
+        if "misafir_sporcu" not in cols:
+            conn.execute(
+                "ALTER TABLE sporcular ADD COLUMN misafir_sporcu INTEGER NOT NULL DEFAULT 0 "
+                "CHECK(misafir_sporcu IN (0,1))"
+            )
+        if "uci_lisans_no" not in cols:
+            conn.execute("ALTER TABLE sporcular ADD COLUMN uci_lisans_no TEXT")
+        if "yabanci_federasyon" not in cols:
+            conn.execute("ALTER TABLE sporcular ADD COLUMN yabanci_federasyon TEXT")
+        if "uci_takim" not in cols:
+            conn.execute("ALTER TABLE sporcular ADD COLUMN uci_takim TEXT")
         if "baba_adi" not in cols:
             conn.execute("ALTER TABLE sporcular ADD COLUMN baba_adi TEXT")
         kategori_kolonlari = {
@@ -411,7 +428,8 @@ def sporcu_ekle(ad: str, soyad: str, kimlik_no: str,
 
 def sporcu_guncelle(sporcu_id: int, **kwargs) -> None:
     izin = {"ad","soyad","baba_adi","kimlik_no","dogum_tarihi","cinsiyet","uyruk","pasaport_no",
-            "telefon","email","adres","spor_dairesi_kayitli","hib_sporcusu"}
+            "telefon","email","adres","spor_dairesi_kayitli","hib_sporcusu",
+            "misafir_sporcu","uci_lisans_no","yabanci_federasyon","uci_takim"}
     sutunlar = {k: v for k, v in kwargs.items() if k in izin}
     if not sutunlar:
         return
@@ -447,6 +465,39 @@ def sporcu_ara(kimlik_no: str = None, ad_soyad: str = None) -> list:
                 (pattern,)
             ).fetchall()
         return []
+
+
+# ---------------------------------------------------------------------------
+# Yaş kategorisi (ulusal lisans)
+# ---------------------------------------------------------------------------
+
+# Ulusal lisans kategorileri (Sporcu Lisans, Tescil, Vize, Transfer ve
+# Uluslararası Yarış Talimatı – UCI ile uyumlu)
+ULUSAL_KATEGORILER = ["U13", "U15", "U17", "U19", "Elite",
+                      "Master A", "Master B", "Master C"]
+
+
+def yas_kategorisi_hesapla(dogum_tarihi: str) -> str:
+    """Doğum tarihinden ulusal lisans yaş kategorisini hesaplar.
+
+    U13: 11-12, U15: 13-14, U17: 15-16, U19: 17-18,
+    Elite: 19-34, Master A: 35-39, Master B: 40-44, Master C: 45+.
+    """
+    if not dogum_tarihi:
+        return "—"
+    try:
+        yas = date.today().year - int(str(dogum_tarihi)[:4])
+    except (TypeError, ValueError):
+        return "—"
+    if 11 <= yas <= 12:  return "U13"
+    if 13 <= yas <= 14:  return "U15"
+    if 15 <= yas <= 16:  return "U17"
+    if 17 <= yas <= 18:  return "U19"
+    if 19 <= yas <= 34:  return "Elite"
+    if 35 <= yas <= 39:  return "Master A"
+    if 40 <= yas <= 44:  return "Master B"
+    if yas >= 45:        return "Master C"
+    return "Kategori Dışı"
 
 
 def hib_kategori_hesapla(dogum_tarihi: str) -> str:
@@ -525,6 +576,127 @@ def hib_sporcu_sil(sporcu_id: int) -> None:
         ).fetchone()
         if kayit:
             raise ValueError("Yarış kaydı bulunan HİB sporcusu silinemez.")
+        conn.execute("DELETE FROM lisanslar WHERE sporcu_id=?", (sporcu_id,))
+        conn.execute("DELETE FROM sporcular WHERE id=?", (sporcu_id,))
+
+
+# ---------------------------------------------------------------------------
+# Misafir Sporcu (UCI Lisanslı) işlemleri
+# ---------------------------------------------------------------------------
+
+def misafir_sporcu_ekle(
+    ad: str, soyad: str, uci_lisans_no: str,
+    uyruk: str = "Diğer", yabanci_federasyon: str = None,
+    uci_takim: str = None, dogum_tarihi: str = None,
+    cinsiyet: str = "Belirtilmedi", pasaport_no: str = None,
+    telefon: str = None, email: str = None, adres: str = None,
+    gecerlilik_bitis: str = None, sezon: str = None,
+) -> int:
+    """
+    UCI lisanslı misafir sporcu kaydı oluşturur ve 'MisafirSporcu' lisansı ekler.
+    (Yabancı Uyruklu ve Misafir Sporcu Lisans, Tescil ve Yarışma Talimatı)
+    UCI lisans numarası, misafir sporcunun benzersiz kimliği olarak kullanılır.
+    """
+    uci_lisans_no = (uci_lisans_no or "").strip()
+    if not uci_lisans_no:
+        raise ValueError("UCI lisans numarası zorunludur.")
+    with get_conn() as conn:
+        var = conn.execute(
+            "SELECT id FROM sporcular WHERE uci_lisans_no=?", (uci_lisans_no,)
+        ).fetchone()
+        if var:
+            raise ValueError(f"Bu UCI lisans numarası ({uci_lisans_no}) zaten kayıtlı.")
+        kullanilacak_sezon = sezon or str(date.today().year)
+        cur = conn.execute(
+            """INSERT INTO sporcular
+               (ad, soyad, kimlik_no, dogum_tarihi, cinsiyet, uyruk,
+                pasaport_no, telefon, email, adres, misafir_sporcu,
+                uci_lisans_no, yabanci_federasyon, uci_takim)
+               VALUES (?,?,?,?,?,?,?,?,?,?,1,?,?,?)""",
+            (ad, soyad, uci_lisans_no, dogum_tarihi, cinsiyet, uyruk,
+             pasaport_no, telefon, email, adres,
+             uci_lisans_no, yabanci_federasyon, uci_takim),
+        )
+        sporcu_id = cur.lastrowid
+        lisans_cur = conn.execute(
+            """INSERT INTO lisanslar
+               (sporcu_id, lisans_turu, sezon, gecerlilik_bitis, durum)
+               VALUES (?, 'MisafirSporcu', ?, ?, 'Aktif')""",
+            (sporcu_id, kullanilacak_sezon, gecerlilik_bitis),
+        )
+        lisans_id = lisans_cur.lastrowid
+        conn.execute(
+            "UPDATE lisanslar SET lisans_no=? WHERE id=?",
+            (f"MIS-{kullanilacak_sezon}-{lisans_id:03d}", lisans_id),
+        )
+        return sporcu_id
+
+
+def misafir_sporcular_listele() -> list:
+    """UCI lisanslı misafir sporcuları aktif lisans bilgileriyle listeler."""
+    with get_conn() as conn:
+        return conn.execute(
+            """SELECT s.id, s.ad, s.soyad, s.cinsiyet, s.dogum_tarihi,
+                      s.uyruk, s.uci_lisans_no, s.yabanci_federasyon,
+                      s.uci_takim, s.pasaport_no, s.telefon, s.email, s.adres,
+                      l.gecerlilik_bitis, l.lisans_no, l.sezon,
+                      COALESCE(l.durum, '—') AS lisans_durum
+               FROM sporcular s
+               LEFT JOIN lisanslar l ON l.id = (
+                   SELECT id FROM lisanslar
+                   WHERE sporcu_id=s.id AND durum='Aktif'
+                   ORDER BY id DESC LIMIT 1
+               )
+               WHERE s.misafir_sporcu=1
+               ORDER BY s.soyad, s.ad"""
+        ).fetchall()
+
+
+def misafir_sporcu_guncelle(
+    sporcu_id: int, *, ad: str, soyad: str, uci_lisans_no: str,
+    uyruk: str = "Diğer", yabanci_federasyon: str = None,
+    uci_takim: str = None, dogum_tarihi: str = None,
+    cinsiyet: str = "Belirtilmedi", pasaport_no: str = None,
+    telefon: str = None, email: str = None, adres: str = None,
+    gecerlilik_bitis: str = None, sezon: str = None,
+) -> None:
+    """UCI lisanslı misafir sporcunun bilgilerini ve aktif lisansını günceller."""
+    uci_lisans_no = (uci_lisans_no or "").strip()
+    if not uci_lisans_no:
+        raise ValueError("UCI lisans numarası zorunludur.")
+    with get_conn() as conn:
+        conn.execute(
+            """UPDATE sporcular
+               SET ad=?, soyad=?, kimlik_no=?, uci_lisans_no=?, uyruk=?,
+                   yabanci_federasyon=?, uci_takim=?, dogum_tarihi=?,
+                   cinsiyet=?, pasaport_no=?, telefon=?, email=?, adres=?
+               WHERE id=? AND misafir_sporcu=1""",
+            (ad, soyad, uci_lisans_no, uci_lisans_no, uyruk,
+             yabanci_federasyon, uci_takim, dogum_tarihi, cinsiyet,
+             pasaport_no, telefon, email, adres, sporcu_id),
+        )
+        conn.execute(
+            """UPDATE lisanslar
+               SET sezon=?, gecerlilik_bitis=?
+               WHERE sporcu_id=? AND durum='Aktif'""",
+            (sezon or str(date.today().year), gecerlilik_bitis, sporcu_id),
+        )
+
+
+def misafir_sporcu_sil(sporcu_id: int) -> None:
+    """Yarış kaydı olmayan misafir sporcuyu ve lisansını siler."""
+    with get_conn() as conn:
+        sporcu = conn.execute(
+            "SELECT misafir_sporcu FROM sporcular WHERE id=?", (sporcu_id,)
+        ).fetchone()
+        if sporcu is None or not sporcu["misafir_sporcu"]:
+            raise ValueError("Misafir sporcu bulunamadı.")
+        kayit = conn.execute(
+            "SELECT 1 FROM yaris_kayitlari WHERE sporcu_id=? LIMIT 1",
+            (sporcu_id,),
+        ).fetchone()
+        if kayit:
+            raise ValueError("Yarış kaydı bulunan misafir sporcu silinemez.")
         conn.execute("DELETE FROM lisanslar WHERE sporcu_id=?", (sporcu_id,))
         conn.execute("DELETE FROM sporcular WHERE id=?", (sporcu_id,))
 
