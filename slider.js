@@ -50,6 +50,7 @@
         return;
       }
       list.innerHTML = docs
+        .filter(function (doc) { return !doc.hidden; })
         .map(function (doc) {
           var safeName = String(doc.name || doc.file).replace(/</g, "&lt;");
           var safeFile = String(doc.file).replace(/[^a-zA-Z0-9_.\-\u00C0-\u024F]/g, function (c) {
