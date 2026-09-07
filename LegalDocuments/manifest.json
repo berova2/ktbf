@@ -19,63 +19,89 @@
     "name": "Merkez Hakem Kurulu Talimatı",
     "file": "Merkez_Hakem_Kurulu_Talimatı.pdf"
   },
-{ "name": "Külüpler İçin Federasyon Üyelik Talimatı",
- "file" : "KT_Bisiklet_Federasyonu_Üyelik_Talimatı.pdf"},
-
- { "name": "Külüpler İçin Federasyon Üyelik Başvuru Formu (excel)",
- "file" : "KULÜP YENİDEN KAYIT- AKTİF ÜYELİK BAŞVURU FORMU.xlsx"},
-
- { "name": "Sporcu Lisans Talimatı",
- "file" : "Sporcu_Lisans_Talimatı.pdf"},
-
- { "name": "Yabancı Uyruklu ve Mkisafir Sporcu Lisans Talimatı", 
- "file" : "Yabanci_Uyruklu_Misafir_Sporcu_Talimati.pdf"},
-
- {"name" :"KTBF Yabancı Federasyon Lisanslı KKTC Vatandaşı Sporcular Talimatı",
- "file" : "KTBF_Yabanci_Federasyon_Lisansli_KKTC_Vatandasi_Sporcular_Talimati.pdf"},
-
- {"name" :"KTBF Yaş Kategorileri Talimatı",
- "file" : "KKTC_Yas_Kategorileri.pdf"},
-
- {"name" :"KTBF 2026 Lisans Ücretleri Talimatı",
- "file" : "KTBF_2026_Lisans_Ucretleri_Talimati.pdf"},
-
- {"name" :"26. Geleneksel Benon Dervişler Yol Bisiklet Yarışı Talimatı",
- "file" : "benon_dervişler_talimat_2026.pdf"},
-
- {"name" :"KTBF Yarış Disiplin ve Ceza Talimatı",
- "file" : "ktbf_yarış_disiplin_talimatı.pdf"},
-
- {"name" :"26.Benon Dervişler Yarışı Ek Talimat -01",
- "file" : "benon_dervisler_ek_talimat_1.pdf"},
-
-  {"name" :"Yaş katetegorileri ile ilgili Yk2026/2-1 Sayılı Karar",
- "file" : "Yk_2026_2_1.pdf"},
-
- {"name" :"26.Benon Dervişler Yarışı Start Listesi",
- "file" : "yaris_kayitlari_benon_dervisler_startlist.pdf"},
-
- {"name" :"26.Benon Dervişler Yarışı Resmi Sonuçlar",
- "file" : "Benon_Dervisler_Iskele_Resmi_Sonuclar_Optimize.pdf"},
-
-  {"name" :"2026 Yarış Takvimi Talimatı",
- "file" : "2026_yarış_takvimi_talimatı.pdf"},
-
-    {"name" :"2026 Dağ Bisikleti/MTB XC Şampiyonası Yarış Talimatı",
- "file" : "mtb_020826_talimat_2026_f.pdf"},
-
-    {"name" :"2026 Dağ Bisikleti/MTB XC Şampiyonası Start Listesi",
- "file" : "MTB_020826_STARTLIST.pdf"},{"name" :"2026 Dağ Bisikleti/MTB XC Şampiyonası Sonuçları"},
- 
- {"file" : "020826 MTB ŞAMPİYONASI.pdf"},{"name" :"30 Ağustos 2026 Zafer Bayramı Kriteryum Yol Bisiklet Yarışı Talimatı",
-"file" : "30_Agustos_2026_Zafer_Bayrami_Kriterium_Yaris_Talimati_SON_v2.pdf"},
-
- {"file" : "020826 MTB ŞAMPİYONASI.pdf"},
-  {"name" :"30 Ağustos 2026 Zafer Bayramı Kriteryum Yol Bisiklet Yarışı Ek Talimat -1 ve Start Listesi",
-"file" : "30_Agustos_2026_Zafer_Bayrami_Kriterium_Yaris_Ek_Talimat.pdf"}
-, {"name" :"30 Ağustos 2026 Zafer Bayramı Kriteryum Yol Bisiklet Yarışı Start Listesi (düzeltme)",
-"file" : "30_Agustos_Kriteryum_Start_List_duzeltme_1.pdf"},
- {"name" :"20 Eylül 2026 Gaziveren Zamana Karşı(TT) Yol Bisiklet Yarışı Talimatı",
-"file" : "20_Eylul_2026_Gaziveren_Zamana_Karsi_TT_Talimati.pdf"}
+  {
+    "name": "Külüpler İçin Federasyon Üyelik Talimatı",
+    "file": "KT_Bisiklet_Federasyonu_Üyelik_Talimatı.pdf"
+  },
+  {
+    "name": "Külüpler İçin Federasyon Üyelik Başvuru Formu (excel)",
+    "file": "KULÜP YENİDEN KAYIT- AKTİF ÜYELİK BAŞVURU FORMU.xlsx"
+  },
+  {
+    "name": "Sporcu Lisans Talimatı",
+    "file": "Sporcu_Lisans_Talimatı.pdf"
+  },
+  {
+    "name": "Yabancı Uyruklu ve Mkisafir Sporcu Lisans Talimatı",
+    "file": "Yabanci_Uyruklu_Misafir_Sporcu_Talimati.pdf"
+  },
+  {
+    "name": "KTBF Yabancı Federasyon Lisanslı KKTC Vatandaşı Sporcular Talimatı",
+    "file": "KTBF_Yabanci_Federasyon_Lisansli_KKTC_Vatandasi_Sporcular_Talimati.pdf"
+  },
+  {
+    "name": "KTBF Yaş Kategorileri Talimatı",
+    "file": "KKTC_Yas_Kategorileri.pdf"
+  },
+  {
+    "name": "KTBF 2026 Lisans Ücretleri Talimatı",
+    "file": "KTBF_2026_Lisans_Ucretleri_Talimati.pdf"
+  },
+  {
+    "name": "26. Geleneksel Benon Dervişler Yol Bisiklet Yarışı Talimatı",
+    "file": "benon_dervişler_talimat_2026.pdf"
+  },
+  {
+    "name": "KTBF Yarış Disiplin ve Ceza Talimatı",
+    "file": "ktbf_yarış_disiplin_talimatı.pdf"
+  },
+  {
+    "name": "26.Benon Dervişler Yarışı Ek Talimat -01",
+    "file": "benon_dervisler_ek_talimat_1.pdf"
+  },
+  {
+    "name": "Yaş katetegorileri ile ilgili Yk2026/2-1 Sayılı Karar",
+    "file": "Yk_2026_2_1.pdf"
+  },
+  {
+    "name": "26.Benon Dervişler Yarışı Start Listesi",
+    "file": "yaris_kayitlari_benon_dervisler_startlist.pdf"
+  },
+  {
+    "name": "26.Benon Dervişler Yarışı Resmi Sonuçlar",
+    "file": "Benon_Dervisler_Iskele_Resmi_Sonuclar_Optimize.pdf"
+  },
+  {
+    "name": "2026 Yarış Takvimi Talimatı",
+    "file": "2026_yarış_takvimi_talimatı.pdf"
+  },
+  {
+    "name": "2026 Dağ Bisikleti/MTB XC Şampiyonası Yarış Talimatı",
+    "file": "mtb_020826_talimat_2026_f.pdf"
+  },
+  {
+    "name": "2026 Dağ Bisikleti/MTB XC Şampiyonası Start Listesi",
+    "file": "MTB_020826_STARTLIST.pdf"
+  },
+  {
+    "name": "2026 Dağ Bisikleti/MTB XC Şampiyonası Sonuçları",
+    "file": "020826 MTB ŞAMPİYONASI.pdf"
+  },
+  {
+    "name": "30 Ağustos 2026 Zafer Bayramı Kriteryum Yol Bisiklet Yarışı Talimatı",
+    "file": "30_Agustos_2026_Zafer_Bayrami_Kriterium_Yaris_Talimati_SON_v2.pdf"
+  },
+  {
+    "name": "30 Ağustos 2026 Zafer Bayramı Kriteryum Yol Bisiklet Yarışı Ek Talimat -1 ve Start Listesi",
+    "file": "30_Agustos_2026_Zafer_Bayrami_Kriterium_Yaris_Ek_Talimat.pdf"
+  },
+  {
+    "name": "30 Ağustos 2026 Zafer Bayramı Kriteryum Yol Bisiklet Yarışı Start Listesi (düzeltme)",
+    "file": "30_Agustos_Kriteryum_Start_List_duzeltme_1.pdf"
+  },
+  {
+    "name": "20 Eylül 2026 Gaziveren Zamana Karşı(TT) Yol Bisiklet Yarışı Talimatı",
+    "file": "20_Eylul_2026_Gaziveren_Zamana_Karsi_TT_Talimati.pdf"
+  }
 ]
 
